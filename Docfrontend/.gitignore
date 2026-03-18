@@ -2,7 +2,8 @@ Env
 .env
 .env.*
 !.env.example
-
+package-lock.json
+package.json
 Dependencies
 node_modules
 

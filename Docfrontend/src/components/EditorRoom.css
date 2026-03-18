@@ -1,0 +1,9 @@
+/* 🌟 STEALTH MODE: Makes the break invisible to the camera, but keeps it in the DOM so it still cuts the page! */
+.pdf-exporting hr.custom-page-break {
+    border-color: transparent !important;
+    background-color: transparent !important;
+}
+
+.pdf-exporting hr.custom-page-break::after {
+    display: none !important;
+}

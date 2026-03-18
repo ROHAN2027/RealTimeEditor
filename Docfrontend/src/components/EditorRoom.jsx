@@ -12,11 +12,19 @@ import {Tldraw} from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import IsolatedMultiplayerTldraw from './IsolatedMultiplayerTldraw';
 import { TLdrawBlot } from './TLdrawBlot';
+import html2pdf from 'html2pdf.js';
+import {PageBreakBlot} from './PageBreakBlot';
+import './EditorRoom.css';
+
+
+
 
 import { useAuth } from '../context/AuthContext'; 
 import { calculateFileHash,getColorFromUserId } from '../utils/fileHelpers';
 Quill.register('modules/cursors', QuillCursor);
 Quill.register(TLdrawBlot);
+Quill.register(PageBreakBlot);
+
 
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -36,6 +44,55 @@ const EditorRoom = () => {
     // states for the TLdraw integration demo
     const [isTLdrawOpen, setIsTLdrawOpen] = useState(false);
     const [activeDrawingId, setActiveDrawingId] = useState(null);
+
+    // 🌟 PDF Modal States
+    const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+
+    // Default PDF Settings
+    const [pdfSettings, setPdfSettings] = useState({
+        filename: 'Project_Document',
+        format: 'a4',
+        orientation: 'portrait'
+    });
+
+    // This generates the live preview
+    const generatePdfPreview = (currentSettings) => {
+        const element = document.querySelector('.ql-editor');
+        if (!element) return;
+
+        setIsGeneratingPreview(true);
+        // 🌟 1. TURN STEALTH MODE ON
+        // This instantly hides the lines right before the camera takes a picture
+        element.classList.add('pdf-exporting');
+
+        const opt = {
+            margin:       [0.5, 0.5, 0.5, 0.5], 
+            filename:     currentSettings.filename + '.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF:        { unit: 'in', format: currentSettings.format, orientation: currentSettings.orientation },
+
+            pagebreak:    { mode: ['css', 'legacy'], after: '.custom-page-break' }
+        };
+        
+
+        // Tell html2pdf to give us a URL instead of saving!
+        html2pdf().set(opt).from(element).output('bloburl').then((pdfUrl) => {
+            // 🌟 2. TURN STEALTH MODE OFF
+            // The picture is done, bring the lines back for the user!
+            element.classList.remove('pdf-exporting');
+            setPdfPreviewUrl(pdfUrl);
+            setIsGeneratingPreview(false);
+        });
+    };
+    // Whenever the modal opens OR the user changes a setting, regenerate the preview
+    useEffect(() => {
+        if (isPdfModalOpen) {
+            generatePdfPreview(pdfSettings);
+        }
+    }, [isPdfModalOpen, pdfSettings.format, pdfSettings.orientation]);
 
     const [tldrawEditor, setTldrawEditor] = useState(null); // Store the TLdraw editor instance for future use
 
@@ -137,6 +194,15 @@ const EditorRoom = () => {
             { id: fakeDrawingId }, 
             'user'
         );
+    };
+
+    const insertPageBreak = () => {
+        if (!quillInstance.current) return;
+        const range = quillInstance.current.getSelection(true);
+        const cursorPosition = range ? range.index : 0;
+        
+        quillInstance.current.insertEmbed(cursorPosition, 'page-break', true, 'user');
+        quillInstance.current.setSelection(cursorPosition + 1, Quill.sources.SILENT);
     };
 
     // ✅ FIX 1: Moved this INSIDE the component so it can access quillInstance!
@@ -335,13 +401,119 @@ const EditorRoom = () => {
                     {isConnected ? 'Live' : 'Connecting...'}
                 </span>
                 <button 
+                        onClick={() => setIsPdfModalOpen(true)} 
+                        style={{marginLeft: '20px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#ec0a0a', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                    >
+                        Export PDF
+                </button>
+
+                <button 
+                        onClick={insertPageBreak} 
+                        style={{marginLeft: '10px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                    >
+                        Add Page Break
+                </button>
+
+                <button 
                     onClick={insertDummyBoard} 
-                    style={{ marginLeft: '20px', padding: '5px 10px', cursor: 'pointer' }}
+                    style={{ marginLeft: '10px', marginBottom: '3px', padding: '5px 10px', cursor: 'pointer', color: 'white', border: 'none', backgroundColor: '#12ec0a', borderRadius: '4px', fontWeight: 'bold' }}
                 >
-                    Insert Dummy TLDraw
+                    Insert TLDraw
                 </button>
             </div>
             <div ref={editorRef} style={{ height: '80vh' }}></div>
+
+            {isPdfModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
+                    
+                    {/* Modal Container */}
+                    <div style={{ display: 'flex', width: '90%', maxWidth: '1200px', height: '90%', backgroundColor: '#2d2d2d', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+                        
+                        {/* LEFT SIDE: Settings Sidebar */}
+                        <div style={{ width: '300px', padding: '30px', backgroundColor: '#1e1e1e', color: 'white', display: 'flex', flexDirection: 'column', gap: '20px', borderRight: '1px solid #404040' }}>
+                            <h2 style={{ margin: '0 0 10px 0' }}>Print Settings</h2>
+
+                            {/* Filename Input */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>File Name</label>
+                                <input 
+                                    type="text" 
+                                    value={pdfSettings.filename}
+                                    onChange={(e) => setPdfSettings({...pdfSettings, filename: e.target.value})}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            {/* Format Dropdown */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Paper Size</label>
+                                <select 
+                                    value={pdfSettings.format}
+                                    onChange={(e) => setPdfSettings({...pdfSettings, format: e.target.value})}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
+                                >
+                                    <option value="a4">A4 (Standard International)</option>
+                                    <option value="letter">Letter (Standard US)</option>
+                                    <option value="legal">Legal (Long)</option>
+                                </select>
+                            </div>
+
+                            {/* Orientation Dropdown */}
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Orientation</label>
+                                <select 
+                                    value={pdfSettings.orientation}
+                                    onChange={(e) => setPdfSettings({...pdfSettings, orientation: e.target.value})}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
+                                >
+                                    <option value="portrait">Portrait (Tall)</option>
+                                    <option value="landscape">Landscape (Wide)</option>
+                                </select>
+                            </div>
+
+                            {/* Spacer to push buttons to the bottom */}
+                            <div style={{ flex: 1 }}></div>
+
+                            {/* Action Buttons */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {/* Download Button Trick: Use an <a> tag pointing to the Blob URL! */}
+                                <a 
+                                    href={pdfPreviewUrl} 
+                                    download={`${pdfSettings.filename}.pdf`}
+                                    style={{ display: 'block', textAlign: 'center', padding: '12px', backgroundColor: '#ef4444', color: 'white', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', pointerEvents: isGeneratingPreview ? 'none' : 'auto', opacity: isGeneratingPreview ? 0.5 : 1 }}
+                                >
+                                    {isGeneratingPreview ? 'Processing...' : 'Download PDF'}
+                                </a>
+                                <button 
+                                    onClick={() => setIsPdfModalOpen(false)}
+                                    style={{ padding: '12px', backgroundColor: 'transparent', color: '#9ca3af', border: '1px solid #404040', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* RIGHT SIDE: Live Iframe Preview */}
+                        <div style={{ flex: 1, backgroundColor: '#52525b', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            {isGeneratingPreview ? (
+                                <div style={{ color: 'white', fontSize: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                                    <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.3)', borderTop: '4px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                                    Generating High-Res Preview...
+                                </div>
+                            ) : (
+                                <iframe 
+                                    src={pdfPreviewUrl} 
+                                    style={{ width: '100%', height: '100%', border: 'none' }}
+                                    title="PDF Preview"
+                                />
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
             {/* 🌟 NEW: The Fixed TLDraw Full-Screen Modal */}
             {isTLdrawOpen && (
                 <div style={{
