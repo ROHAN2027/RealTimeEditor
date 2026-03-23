@@ -6,6 +6,8 @@ export default function ProjectSideBar({
     currentProjectId,
     onlineUsers = [], 
     onClose,
+    onPreviewClick,         // 🌟 FIX 1: Added missing prop
+    versionRefreshTrigger   // 🌟 FIX 2: Added missing trigger prop
 }) {
     const [activeTab, setActiveTab] = useState('projects'); 
     
@@ -18,7 +20,7 @@ export default function ProjectSideBar({
     useEffect(() => {
         if (!isOpen) return;
 
-        const fetchProjects = async () => {
+const fetchProjects = async () => {
             try {
                 const token = localStorage.getItem('jwt_token');
                 const res = await api.get('/projects', {
@@ -32,6 +34,15 @@ export default function ProjectSideBar({
             }
         };
 
+        fetchProjects();
+    }, [isOpen, currentProjectId]);
+
+
+    // 🌟 FETCH 2: Fetches versions when Tab opens OR when a save happens!
+    useEffect(() => {
+        // Only fetch if the sidebar is open and we are looking at the versions tab
+        if (!isOpen || activeTab !== 'versions') return;
+
         const fetchVersions = async () => {
             try {
                 const token = localStorage.getItem('jwt_token');
@@ -44,9 +55,9 @@ export default function ProjectSideBar({
             }
         };
 
-        fetchProjects();
         fetchVersions();
-    }, [isOpen, currentProjectId]);
+    // 👇 The magic is here: It listens to versionRefreshTrigger!
+    }, [isOpen, activeTab, currentProjectId, versionRefreshTrigger]);
 
     const filteredProjects = allProjects.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -161,6 +172,13 @@ export default function ProjectSideBar({
                                         <span>{new Date(v.createdAt).toLocaleDateString()}</span>
                                         <span style={{ textTransform: 'capitalize' }}>{v.saveType}</span>
                                     </div>
+                                    {/* 🌟 NEW: The Preview Button */}
+                                    <button 
+                                        onClick={() => onPreviewClick(v._id)}
+                                        style={{ marginTop: '8px', padding: '4px 8px', fontSize: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '100%' }}
+                                    >
+                                        Preview & Restore
+                                    </button>
                                 </div>
                             ))
                         )}

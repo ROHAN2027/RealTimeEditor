@@ -113,20 +113,53 @@ export const initializeSocket = (httpServer) => {
             socket.to(projectId).emit("yjs-awareness", awarenessData);
         });
 
-        socket.on("disconnect",async() => {
+        // socket.on("disconnect",async() => {
+        //     if(currentRoom && activeDocuments.has(currentRoom)) {
+        //         const roomdata = activeDocuments.get(currentRoom);
+        //         roomdata.clients.delete(socket.id);
+        //         if(roomdata.clients.size === 0) {
+        //             if(roomdata.isDirty) {
+        //                 const stateVector = Y.encodeStateAsUpdate(roomdata.doc);
+        //                 await Project.findByIdAndUpdate(currentRoom, {
+        //                     documentData: Buffer.from(stateVector)
+        //                 });
+        //                 console.log(`Project ${currentRoom} saved to database on last client disconnect.`);
+        //             }
+        //             activeDocuments.delete(currentRoom);
+        //             console.log(`Project ${currentRoom} removed from memory as no clients are connected.`);
+        //         }
+        //     }
+        // });
+        socket.on("disconnect", async () => {
             if(currentRoom && activeDocuments.has(currentRoom)) {
                 const roomdata = activeDocuments.get(currentRoom);
                 roomdata.clients.delete(socket.id);
+                
+                // If the room is empty, we need to save and clean up
                 if(roomdata.clients.size === 0) {
                     if(roomdata.isDirty) {
                         const stateVector = Y.encodeStateAsUpdate(roomdata.doc);
-                        await Project.findByIdAndUpdate(currentRoom, {
-                            documentData: Buffer.from(stateVector)
-                        });
-                        console.log(`Project ${currentRoom} saved to database on last client disconnect.`);
+                        try {
+                            await Project.findByIdAndUpdate(currentRoom, {
+                                documentData: Buffer.from(stateVector)
+                            });
+                            console.log(`Project ${currentRoom} saved to database on disconnect.`);
+                            roomdata.isDirty = false;
+                        } catch (error) {
+                            console.error(`Error saving project ${currentRoom} on disconnect:`, error);
+                        }
                     }
-                    activeDocuments.delete(currentRoom);
-                    console.log(`Project ${currentRoom} removed from memory as no clients are connected.`);
+                    
+                    // 🌟 THE RACE CONDITION CURE:
+                    // Because 'await' pauses the code, we must check if a user quickly 
+                    // refreshed and rejoined the room while we were waiting for MongoDB!
+                    // Only delete the RAM buffer if the room is STILL empty.
+                    if(roomdata.clients.size === 0) {
+                        activeDocuments.delete(currentRoom);
+                        console.log(`Project ${currentRoom} removed from memory as no clients are connected.`);
+                    } else {
+                        console.log(`Project ${currentRoom} kept in memory (User rejoined during save).`);
+                    }
                 }
             }
         });
