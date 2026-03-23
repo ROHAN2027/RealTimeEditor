@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import Project from '../models/Project.js';
+import ProjectVersion from '../models/ProjectVersion.js';
 import {z} from 'zod';
 
 const projectSchema = z.object({
@@ -64,6 +65,8 @@ export const getProjects = async (req, res) => {
             ]
         })
         .select('-documentData')
+        .populate('ownerId', 'name email')       // 🌟 FIX 2: Fetch the owner's name
+        .populate('collaborators', 'name email')
         .sort({ updatedAt: -1 });//this will move most resent to first
          // Exclude document data to save bandwidth
         return res.status(200).json({
@@ -228,6 +231,90 @@ export const leaveProject = async (req, res) => {
 }
 
 
+export const createProjectVersion = async (req, res) => {
+    try {
+        const {projectId} = req.params;
+        const {versionName, binaryData, saveType} = req.body;
 
+        const newVersion = await ProjectVersion.create({
+            projectId: projectId,
+            versionName: versionName,
+            yjsBinary: Buffer.from(binaryData), // Assuming binaryData is sent as a base64 string
+            savedBy: req.userId,
+            saveType: saveType
+        });
 
+        const Maxversions = saveType === 'auto' ? 5 : 10;
+        // Clean up old versions if we exceed the limit
+        const oldversions = await ProjectVersion.find({ projectId: projectId, saveType: saveType })
+            .sort({ createdAt: -1 })
+            .skip(Maxversions)
+            .select('_id'); // Only select the _id field for deletion
 
+        if (oldversions.length > 0) {
+            const oldVersionIds = oldversions.map(v => v._id);
+            await ProjectVersion.deleteMany({ _id: { $in: oldVersionIds } });
+            console.log(`Deleted ${oldVersionIds.length} old ${saveType} versions for project ${projectId}`);
+        }
+        res.status(201).json({
+            success: true,
+            message: "Project version created successfully",
+            version: newVersion._id
+        });
+    } catch (error) {
+        console.error("Error creating project version:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error while creating project version"
+        });
+    }
+}
+
+export const getProjectVersions = async (req, res) => {
+    try{
+        const {projectId} = req.params;
+        const versions = await ProjectVersion.find({ projectId: projectId })
+        .select('-yjsBinary') // Exclude the binary data to save bandwidth
+        .populate('savedBy', 'name email')
+        .sort({ updatedAt: -1 });
+        res.status(200).json({
+            success: true,
+            versions: versions
+        });
+    } catch (error) {
+        console.error("Error fetching project versions:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error while fetching project versions"
+        });
+    }
+};
+
+export const getProjectVersionById = async (req, res) => {
+    try {
+        const {projectId, versionId} = req.params;
+        const version = await ProjectVersion.findOne({ _id: versionId, projectId: projectId }).populate('savedBy', 'name email');
+        if (!version) {
+            return res.status(404).json({
+                success: false,
+                message: "Version not found"
+            });
+        }
+        res.status(200).json({
+            success: true,
+            version: version
+        });
+    } catch (error) {
+        console.error("Error fetching project version:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error while fetching project version"
+        });
+    }
+}
+
+// const oldVersionData = response.data.version.yjsBinary.data; // Access the inner 'data' array
+// const uint8ArrayBlob = new Uint8Array(oldVersionData); // Convert it back for Yjs
+
+// // Apply it to the document!
+// Y.applyUpdate(ydocRef.current, uint8ArrayBlob);

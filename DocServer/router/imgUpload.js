@@ -1,10 +1,12 @@
 import {Router} from 'express';
 import {authMiddleware} from '../middlewares/authMiddleware.js';
 import { uploadImage } from '../controllers/uploadImgController.js';
+import {requireProjectAccess } from '../middlewares/projectMiddleware.js';
 import multer from 'multer';
 
-const imgRouter = Router();
+const imgRouter = Router({ mergeParams: true }); // Merge params to access projectId in the controller
 imgRouter.use(authMiddleware); // Apply auth middleware to all routes in this router
+imgRouter.use(requireProjectAccess); // Apply project access middleware to all routes in this router
 
 const storage = multer.memoryStorage();
 const upload = multer({ 

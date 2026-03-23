@@ -161,7 +161,8 @@ export default function Dashboard() {
 
                 {/* Role */}
                 <p className="text-xs font-medium text-slate-400 mb-3">
-                  Role: <span className="text-slate-600">{project.ownerId === user?._id ? 'Owner' : 'Collaborator'}</span>
+                  Role: <span className="text-slate-600">{/* 🌟 FIX: Checks for the ID whether it is a populated object OR a raw string */}
+{(project.ownerId?._id || project.ownerId) === user?._id ? 'Owner' : 'Collaborator'}</span>
                 </p>
 
                 {/* Footer: collaborators count + date */}

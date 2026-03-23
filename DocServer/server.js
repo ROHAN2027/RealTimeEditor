@@ -9,6 +9,7 @@ import { initializeSocket } from './socket.js';
 import imgRouter from "./router/imgUpload.js";
 import drawingRoutes from "./router/drawingRoutes.js";
 
+
 await connectDB();
 
 const PORT = process.env.PORT || 3000;
@@ -19,7 +20,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/invites', invitationRoutes);
-app.use('/api/iupload', imgRouter);
+app.use('/api/:projectId/iupload', imgRouter);
 app.use('/api/drawings', drawingRoutes);
 
 app.use((err, req, res, next) => {

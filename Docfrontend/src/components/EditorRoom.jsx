@@ -16,16 +16,13 @@ import html2pdf from 'html2pdf.js';
 import {PageBreakBlot} from './PageBreakBlot';
 import './EditorRoom.css';
 
-
-
+import ProjectSideBar from './ProjectSideBar';
 
 import { useAuth } from '../context/AuthContext'; 
 import { calculateFileHash,getColorFromUserId } from '../utils/fileHelpers';
 Quill.register('modules/cursors', QuillCursor);
 Quill.register(TLdrawBlot);
 Quill.register(PageBreakBlot);
-
-
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -35,8 +32,12 @@ const EditorRoom = () => {
     const editorRef = useRef(null);
     const quillInstance = useRef(null); 
 
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState([]);
+
     const ydocRef = useRef(null);
     const isolatedYdocRef = useRef(null);
+    const awarenessRef = useRef(null);
 
     const [isConnected, setIsConnected] = useState(false);
     const [mainSocket, setMainSocket] = useState(null);
@@ -77,7 +78,6 @@ const EditorRoom = () => {
             pagebreak:    { mode: ['css', 'legacy'], after: '.custom-page-break' }
         };
         
-
         // Tell html2pdf to give us a URL instead of saving!
         html2pdf().set(opt).from(element).output('bloburl').then((pdfUrl) => {
             // 🌟 2. TURN STEALTH MODE OFF
@@ -87,6 +87,7 @@ const EditorRoom = () => {
             setIsGeneratingPreview(false);
         });
     };
+
     // Whenever the modal opens OR the user changes a setting, regenerate the preview
     useEffect(() => {
         if (isPdfModalOpen) {
@@ -120,7 +121,7 @@ const EditorRoom = () => {
         const imageFormData = new FormData();
         imageFormData.append('image',imageFile);
         console.log("☁️ Uploading to Cloudinary...");
-        const imgResponse = await api.post('/iupload', imageFormData, {
+        const imgResponse = await api.post(`${projectId}/iupload`, imageFormData, {
             params: { hash: fileHash, drawingId: activeDrawingId },
             headers: authHeaders
         });
@@ -142,7 +143,7 @@ const EditorRoom = () => {
         mathFormData.append('thumbnailUrl', finalImageUrl);
 
         console.log("saving math to database...");
-        const dbResponse = await api.post('/drawings/save', mathFormData, {
+        const dbResponse = await api.post(`/drawings/${projectId}/save`, mathFormData, {
             headers: authHeaders
         });
 
@@ -221,7 +222,7 @@ const EditorRoom = () => {
             formData.append('image', file);
             const token = localStorage.getItem('jwt_token');
             // ✅ FIX 3: Axios automatically parses JSON. No need for response.json()
-            const response = await api.post('/iupload', formData, {
+            const response = await api.post(`${projectId}/iupload`, formData, {
                 params: { hash: fileHash },
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -258,9 +259,15 @@ const EditorRoom = () => {
         let binding;
 
         const awareness = new awarenessProtocol.Awareness(ydoc);
+        
+        // 🌟 ADD-ON 1: We save the awareness to the ref so Auto-Save can see it
+        awarenessRef.current = awareness;
+
+        // 🌟 ADD-ON 2: Added _id: user?._id here so the Sidebar correctly tracks users
         awareness.setLocalStateField('user', {
-            name: user.name || 'Anonymous',
-            color: getColorFromUserId(user._id)
+            _id: user?._id,
+            name: user?.name || 'Anonymous',
+            color: getColorFromUserId(user?._id)
         });
 
         const imageHandler = () => {
@@ -340,17 +347,29 @@ const EditorRoom = () => {
 
         socket.on('yjs-init', (updateData) => {
             if (!updateData || updateData.byteLength === 0) return; 
+            if (!updateData) return; 
             try {
-                Y.applyUpdate(ydoc, new Uint8Array(updateData), 'server');
+                let binaryData;
+                // If it's a Mongoose buffer JSON object
+                if (updateData.type === 'Buffer' && Array.isArray(updateData.data)) {
+                    binaryData = new Uint8Array(updateData.data);
+                } else {
+                    // Standard Array or ArrayBuffer
+                    binaryData = new Uint8Array(updateData);
+                }
+                if (binaryData.length === 0) return;
+                Y.applyUpdate(ydoc, binaryData, 'server');
             } catch (error) {
-                console.error("Yjs Init Error - Database data might be corrupted:", error);
+                console.error("Yjs Init Error:", error);
             }
         });
 
         socket.on('yjs-update', (updateData) => {
             if (!updateData || updateData.byteLength === 0) return;
             try {
-                Y.applyUpdate(ydoc, new Uint8Array(updateData), 'server');
+                const binaryData = new Uint8Array(updateData);
+                if (binaryData.length === 0) return;
+                Y.applyUpdate(ydoc, binaryData, 'server');
             } catch (error) {
                 console.error("Yjs Update Error:", error);
             }
@@ -367,8 +386,30 @@ const EditorRoom = () => {
                 const changedClients = added.concat(updated, removed);
                 const updateBuffer = awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients);
                 socket.emit('yjs-awareness', projectId, updateBuffer);
+                // 🌟 FIX 3: THE "SPLIT BRAIN" CURE
+                // If a new user just joined, blast our live RAM state to the room!
+                // This ensures they have all our unsaved changes immediately.
+                if (added.length > 0) {
+                    const fullState = Y.encodeStateAsUpdate(ydoc);
+                    socket.emit('yjs-update', projectId, fullState);
+                }
             }
         });
+
+        // 🌟 ADD-ON 3: Tracking Online Users for the Sidebar
+        const updateOnlineUsers = () => {
+            const states = Array.from(awareness.getStates().values());
+            const users = states.map(state => ({
+                id: state.user?._id,
+                name: state.user?.name || 'Anonymous',
+                color: state.user?.color || '#000000',
+                isMe: state.user?.name === user?.name
+            })).filter(u => u.id); 
+            setOnlineUsers(users);
+        };
+
+        awareness.on('change', updateOnlineUsers);
+        updateOnlineUsers(); 
 
         socket.on('yjs-awareness', (updateBuffer) => {
             if (!updateBuffer || updateBuffer.byteLength === 0) return;
@@ -381,10 +422,18 @@ const EditorRoom = () => {
 
         return () => {
             console.log("🔴 Cleaning up Editor...");
+            
+            // 🌟 FIX 1: Destroy awareness FIRST so it broadcasts "I'm leaving"
+            if (awarenessRef.current) {
+                awarenessRef.current.destroy(); 
+            }
+            awareness.destroy(); 
             socket.disconnect();
             if (binding) binding.destroy();
-            awareness.destroy(); 
             ydoc.destroy();
+            ydocRef.current = null;
+            isolatedYdocRef.current = null;
+            awarenessRef.current = null;
             quillInstance.current = null;
             if (editorRef.current) {
                 editorRef.current.innerHTML = '';
@@ -393,176 +442,237 @@ const EditorRoom = () => {
 
     }, [projectId, user?._id, user?.name]); 
 
+    // 🌟 ADD-ON 4: The Auto-Save Pulse logic
+    useEffect(() => {
+        if(!ydocRef.current) return;
+
+        const metadata = ydocRef.current.getMap('metadata');
+        if(!metadata.has('lastSavedTime')){
+            metadata.set('lastSavedTime', Date.now());
+        }
+
+        const pulseInterval = setInterval(async() => {
+            if(!ydocRef.current || !awarenessRef.current) return;
+
+            const lastSavedTime = metadata.get('lastSavedTime') || 0;
+            const now = Date.now();
+            const timeSinceLastSave = now - lastSavedTime;
+            if(timeSinceLastSave < 600000) {
+                return;
+            }
+            
+            const connectedClients = Array.from(awarenessRef.current.getStates().keys());
+            const leaderId = Math.min(...connectedClients);
+
+            if(ydocRef.current.clientID !== leaderId){
+                return;
+            }
+            metadata.set('lastSavedTime', Date.now());
+            console.log("Global 10 minutes reached! Leader executing auto-save...");
+            const currentBlob = Y.encodeStateAsUpdate(ydocRef.current);
+            try {
+                await api.post(`/projects/${projectId}/versions`, {
+                    versionName: `Auto-save at ${new Date().toLocaleTimeString()}`,
+                    binaryData: Array.from(currentBlob), 
+                    saveType: 'auto' 
+                });
+            } catch (error) {
+                console.error("Error occurred while auto-saving:", error);
+            }
+        },30000); 
+        return () => clearInterval(pulseInterval);
+    },[projectId]);
+
     return (
-        <div className="editor-container">
-            <div className="editor-header">
-                <h2>Project Editor</h2>
-                <span style={{ color: isConnected ? 'green' : 'red', marginLeft: '10px' }}>
-                    {isConnected ? 'Live' : 'Connecting...'}
-                </span>
-                <button 
-                        onClick={() => setIsPdfModalOpen(true)} 
-                        style={{marginLeft: '20px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#ec0a0a', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+        // 🌟 ADD-ON 5: A minimal flex wrapper so the Sidebar and Editor sit side-by-side
+        <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+            
+            <ProjectSideBar 
+                isOpen={isSidebarOpen} 
+                currentProjectId={projectId} 
+                onlineUsers={onlineUsers}
+                onClose={() => setIsSidebarOpen(false)}
+            />
+
+            {/* Everything below this point is YOUR exact HTML/CSS structure */}
+            <div className="editor-container" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="editor-header">
+                    {/* ADD-ON 6: Hamburger Button */}
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', marginRight: '15px', color: 'inherit' }}
                     >
-                        Export PDF
-                </button>
-
-                <button 
-                        onClick={insertPageBreak} 
-                        style={{marginLeft: '10px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
-                    >
-                        Add Page Break
-                </button>
-
-                <button 
-                    onClick={insertDummyBoard} 
-                    style={{ marginLeft: '10px', marginBottom: '3px', padding: '5px 10px', cursor: 'pointer', color: 'white', border: 'none', backgroundColor: '#12ec0a', borderRadius: '4px', fontWeight: 'bold' }}
-                >
-                    Insert TLDraw
-                </button>
-            </div>
-            <div ref={editorRef} style={{ height: '80vh' }}></div>
-
-            {isPdfModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
+                        ☰
+                    </button>
                     
-                    {/* Modal Container */}
-                    <div style={{ display: 'flex', width: '90%', maxWidth: '1200px', height: '90%', backgroundColor: '#2d2d2d', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+                    <h2>Project Editor</h2>
+                    <span style={{ color: isConnected ? 'green' : 'red', marginLeft: '10px' }}>
+                        {isConnected ? 'Live' : 'Connecting...'}
+                    </span>
+                    <button 
+                            onClick={() => setIsPdfModalOpen(true)} 
+                            style={{marginLeft: '20px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#ec0a0a', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                        >
+                            Export PDF
+                    </button>
+
+                    <button 
+                            onClick={insertPageBreak} 
+                            style={{marginLeft: '10px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+                        >
+                            Add Page Break
+                    </button>
+
+                    <button 
+                        onClick={insertDummyBoard} 
+                        style={{ marginLeft: '10px', marginBottom: '3px', padding: '5px 10px', cursor: 'pointer', color: 'white', border: 'none', backgroundColor: '#12ec0a', borderRadius: '4px', fontWeight: 'bold' }}
+                    >
+                        Insert TLDraw
+                    </button>
+                </div>
+                <div ref={editorRef} style={{ height: '80vh' }}></div>
+
+                {isPdfModalOpen && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
                         
-                        {/* LEFT SIDE: Settings Sidebar */}
-                        <div style={{ width: '300px', padding: '30px', backgroundColor: '#1e1e1e', color: 'white', display: 'flex', flexDirection: 'column', gap: '20px', borderRight: '1px solid #404040' }}>
-                            <h2 style={{ margin: '0 0 10px 0' }}>Print Settings</h2>
+                        {/* Modal Container */}
+                        <div style={{ display: 'flex', width: '90%', maxWidth: '1200px', height: '90%', backgroundColor: '#2d2d2d', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+                            
+                            {/* LEFT SIDE: Settings Sidebar */}
+                            <div style={{ width: '300px', padding: '30px', backgroundColor: '#1e1e1e', color: 'white', display: 'flex', flexDirection: 'column', gap: '20px', borderRight: '1px solid #404040' }}>
+                                <h2 style={{ margin: '0 0 10px 0' }}>Print Settings</h2>
 
-                            {/* Filename Input */}
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>File Name</label>
-                                <input 
-                                    type="text" 
-                                    value={pdfSettings.filename}
-                                    onChange={(e) => setPdfSettings({...pdfSettings, filename: e.target.value})}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', boxSizing: 'border-box' }}
-                                />
+                                {/* Filename Input */}
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>File Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={pdfSettings.filename}
+                                        onChange={(e) => setPdfSettings({...pdfSettings, filename: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                {/* Format Dropdown */}
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Paper Size</label>
+                                    <select 
+                                        value={pdfSettings.format}
+                                        onChange={(e) => setPdfSettings({...pdfSettings, format: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
+                                    >
+                                        <option value="a4">A4 (Standard International)</option>
+                                        <option value="letter">Letter (Standard US)</option>
+                                        <option value="legal">Legal (Long)</option>
+                                    </select>
+                                </div>
+
+                                {/* Orientation Dropdown */}
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Orientation</label>
+                                    <select 
+                                        value={pdfSettings.orientation}
+                                        onChange={(e) => setPdfSettings({...pdfSettings, orientation: e.target.value})}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
+                                    >
+                                        <option value="portrait">Portrait (Tall)</option>
+                                        <option value="landscape">Landscape (Wide)</option>
+                                    </select>
+                                </div>
+
+                                {/* Spacer to push buttons to the bottom */}
+                                <div style={{ flex: 1 }}></div>
+
+                                {/* Action Buttons */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {/* Download Button Trick: Use an <a> tag pointing to the Blob URL! */}
+                                    <a 
+                                        href={pdfPreviewUrl} 
+                                        download={`${pdfSettings.filename}.pdf`}
+                                        style={{ display: 'block', textAlign: 'center', padding: '12px', backgroundColor: '#ef4444', color: 'white', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', pointerEvents: isGeneratingPreview ? 'none' : 'auto', opacity: isGeneratingPreview ? 0.5 : 1 }}
+                                    >
+                                        {isGeneratingPreview ? 'Processing...' : 'Download PDF'}
+                                    </a>
+                                    <button 
+                                        onClick={() => setIsPdfModalOpen(false)}
+                                        style={{ padding: '12px', backgroundColor: 'transparent', color: '#9ca3af', border: '1px solid #404040', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Format Dropdown */}
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Paper Size</label>
-                                <select 
-                                    value={pdfSettings.format}
-                                    onChange={(e) => setPdfSettings({...pdfSettings, format: e.target.value})}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
-                                >
-                                    <option value="a4">A4 (Standard International)</option>
-                                    <option value="letter">Letter (Standard US)</option>
-                                    <option value="legal">Legal (Long)</option>
-                                </select>
+                            {/* RIGHT SIDE: Live Iframe Preview */}
+                            <div style={{ flex: 1, backgroundColor: '#52525b', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                {isGeneratingPreview ? (
+                                    <div style={{ color: 'white', fontSize: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                                        <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.3)', borderTop: '4px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                                        Generating High-Res Preview...
+                                    </div>
+                                ) : (
+                                    <iframe 
+                                        src={pdfPreviewUrl} 
+                                        style={{ width: '100%', height: '100%', border: 'none' }}
+                                        title="PDF Preview"
+                                    />
+                                )}
                             </div>
 
-                            {/* Orientation Dropdown */}
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Orientation</label>
-                                <select 
-                                    value={pdfSettings.orientation}
-                                    onChange={(e) => setPdfSettings({...pdfSettings, orientation: e.target.value})}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}
-                                >
-                                    <option value="portrait">Portrait (Tall)</option>
-                                    <option value="landscape">Landscape (Wide)</option>
-                                </select>
-                            </div>
+                        </div>
+                    </div>
+                )}
 
-                            {/* Spacer to push buttons to the bottom */}
-                            <div style={{ flex: 1 }}></div>
-
-                            {/* Action Buttons */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {/* Download Button Trick: Use an <a> tag pointing to the Blob URL! */}
-                                <a 
-                                    href={pdfPreviewUrl} 
-                                    download={`${pdfSettings.filename}.pdf`}
-                                    style={{ display: 'block', textAlign: 'center', padding: '12px', backgroundColor: '#ef4444', color: 'white', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', pointerEvents: isGeneratingPreview ? 'none' : 'auto', opacity: isGeneratingPreview ? 0.5 : 1 }}
-                                >
-                                    {isGeneratingPreview ? 'Processing...' : 'Download PDF'}
-                                </a>
+                {/* 🌟 NEW: The Fixed TLDraw Full-Screen Modal */}
+                {isTLdrawOpen && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                        backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999,
+                        display: 'flex', flexDirection: 'column', padding: '20px',
+                        boxSizing: 'border-box' // 🔧 FIX: Stops the padding from pushing it off-screen!
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px 8px 0 0',
+                            borderBottom: '1px solid #e5e7eb'
+                        }}>
+                            <h3 style={{ margin: 0 }}>Editing Drawing: {activeDrawingId}</h3>
+                            
+                            {/* 🔧 FIX: Added a gap and the new Save Button */}
+                            <div style={{ display: 'flex', gap: '10px' }}>
                                 <button 
-                                    onClick={() => setIsPdfModalOpen(false)}
-                                    style={{ padding: '12px', backgroundColor: 'transparent', color: '#9ca3af', border: '1px solid #404040', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                                    onClick={handleSaveDrawing} 
+                                    style={{ padding: '8px 16px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                                 >
-                                    Cancel
+                                    Save Drawing
+                                </button>
+                                <button 
+                                    onClick={() => setIsTLdrawOpen(false)} 
+                                    style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    Close
                                 </button>
                             </div>
                         </div>
 
-                        {/* RIGHT SIDE: Live Iframe Preview */}
-                        <div style={{ flex: 1, backgroundColor: '#52525b', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                            {isGeneratingPreview ? (
-                                <div style={{ color: 'white', fontSize: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-                                    <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.3)', borderTop: '4px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                                    Generating High-Res Preview...
-                                </div>
-                            ) : (
-                                <iframe 
-                                    src={pdfPreviewUrl} 
-                                    style={{ width: '100%', height: '100%', border: 'none' }}
-                                    title="PDF Preview"
+                        {/* The Actual Canvas */}
+                        <div style={{ flex: 1, backgroundColor: '#fff', borderRadius: '0 0 8px 8px', overflow: 'hidden', position: 'relative' }}>
+                            {/* 🌟 Use the wrapper and pass the global Yjs Doc! */}
+                            {
+                                <IsolatedMultiplayerTldraw 
+                                    drawingId={activeDrawingId}
+                                    projectId={projectId}
+                                    onMount={setTldrawEditor}
+                                    isolatedYdocRef={isolatedYdocRef}
+                                    mainSocket={mainSocket}
+                                    // 🌟 NEW: Pass the empty bucket
                                 />
-                            )}
-                        </div>
-
-                    </div>
-                </div>
-            )}
-
-            {/* 🌟 NEW: The Fixed TLDraw Full-Screen Modal */}
-            {isTLdrawOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-                    backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999,
-                    display: 'flex', flexDirection: 'column', padding: '20px',
-                    boxSizing: 'border-box' // 🔧 FIX: Stops the padding from pushing it off-screen!
-                }}>
-                    {/* Modal Header */}
-                    <div style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px 8px 0 0',
-                        borderBottom: '1px solid #e5e7eb'
-                    }}>
-                        <h3 style={{ margin: 0 }}>Editing Drawing: {activeDrawingId}</h3>
-                        
-                        {/* 🔧 FIX: Added a gap and the new Save Button */}
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button 
-                                onClick={handleSaveDrawing} 
-                                style={{ padding: '8px 16px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                            >
-                                Save Drawing
-                            </button>
-                            <button 
-                                onClick={() => setIsTLdrawOpen(false)} 
-                                style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                            >
-                                Close
-                            </button>
+                            }
                         </div>
                     </div>
-
-                    {/* The Actual Canvas */}
-                    <div style={{ flex: 1, backgroundColor: '#fff', borderRadius: '0 0 8px 8px', overflow: 'hidden', position: 'relative' }}>
-                        {/* 🌟 Use the wrapper and pass the global Yjs Doc! */}
-                        {
-                            <IsolatedMultiplayerTldraw 
-                                drawingId={activeDrawingId}
-                                projectId={projectId}
-                                onMount={setTldrawEditor}
-                                isolatedYdocRef={isolatedYdocRef}
-                                mainSocket={mainSocket}
-                                // 🌟 NEW: Pass the empty bucket
-                            />
-                        }
-                    </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };

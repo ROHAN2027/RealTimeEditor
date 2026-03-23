@@ -17,4 +17,7 @@ projectRouter.delete('/:projectId/collaborators/me', requireProjectAccess, proje
 projectRouter.post('/:projectId/collaborators', requireProjectOwnership, invitationController.sendInvitation);
 projectRouter.get('/:projectId/invites', requireProjectOwnership, invitationController.getProjectInvitations);
 
+projectRouter.post('/:projectId/versions', requireProjectAccess, projectController.createProjectVersion);
+projectRouter.get('/:projectId/versions', requireProjectAccess, projectController.getProjectVersions);
+projectRouter.get('/:projectId/versions/:versionId', requireProjectAccess, projectController.getProjectVersionById);
 export default projectRouter;
