@@ -20,6 +20,8 @@ import ProjectSideBar from './ProjectSideBar';
 import VersionPreviewModal from './VersionPreviewModal';
 
 import { useAuth } from '../context/AuthContext'; 
+import { useSocket } from '../context/SocketContext';
+
 import { calculateFileHash, getColorFromUserId } from '../utils/fileHelpers';
 Quill.register('modules/cursors', QuillCursor);
 Quill.register(TLdrawBlot);
@@ -30,6 +32,8 @@ const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 const EditorRoom = () => {
     const { projectId } = useParams();
     const { user } = useAuth(); 
+    const socket = useSocket();
+
     const editorRef = useRef(null);
     const quillInstance = useRef(null); 
 
@@ -272,14 +276,12 @@ const EditorRoom = () => {
 
     // 🌟 CLEANED & DEDUPLICATED WEBSOCKET LOGIC
     useEffect(() => {
-        const token = localStorage.getItem('jwt_token'); 
-        if (!token || !user) return;
+        if (!socket || !user) return; // ✅ Just wait for the Global Socket and User!
 
         if (!ydocRef.current) ydocRef.current = new Y.Doc();
         const ydoc = ydocRef.current;
         
-        const socket = io(backendUrl, { auth: { token } });
-        setMainSocket(socket); 
+        setMainSocket(socket);  // pass to TLdraw
         
         const ytext = ydoc.getText('quill');
         let binding;
@@ -343,13 +345,6 @@ const EditorRoom = () => {
             binding = new QuillBinding(ytext, quillInstance.current, awareness);
         }
 
-        socket.on('connect', () => {
-            setIsConnected(true);
-            socket.emit("join-document", projectId);
-        });
-
-        socket.on('disconnect', () => setIsConnected(false));
-
         // 🌟 ONE UNIVERSAL PARSER (No Duplicates!)
         const parseSocketData = (data) => {
             if (!data) return null;
@@ -357,23 +352,61 @@ const EditorRoom = () => {
             return new Uint8Array(data);
         };
 
-        socket.on('yjs-init', (data) => {
+        const handleInit = (incomingProjectId, data) => {
+            if(incomingProjectId !== projectId) return;
             try {
                 const binaryData = parseSocketData(data);
                 if (binaryData && binaryData.length > 0) Y.applyUpdate(ydoc, binaryData, 'server');
             } catch (error) { console.error("Init Error:", error); }
-        });
+        }
 
-        socket.on('yjs-update', (data) => {
+        const handleUpdate = (incomingProjectId, data) => {
+            if(incomingProjectId !== projectId) return;
             try {
                 const binaryData = parseSocketData(data);
                 if (binaryData && binaryData.length > 0) Y.applyUpdate(ydoc, binaryData, 'server');
             } catch (error) { console.error("Update Error:", error); }
-        });
+        }
+
+        const handleAwareness =  (incomingProjectId, data) => {
+            if(incomingProjectId !== projectId) return;
+            try {
+                const binaryData = parseSocketData(data);
+                if (binaryData && binaryData.length > 0) awarenessProtocol.applyAwarenessUpdate(awareness, binaryData, 'server');
+            } catch (error) { console.error("Awareness Error:", error); }
+        }
+
+        socket.on('yjs-init', handleInit);
+
+        socket.on('yjs-update', handleUpdate);
+        
+        socket.on('yjs-awareness', handleAwareness);
+
+        const handleReconnect = () => {
+            setIsConnected(true);
+            socket.emit("join-document", projectId);
+        }
+        // 🌟 NEW: Make disconnect a named function so we can safely remove it!
+        const handleDisconnect = () => {
+            setIsConnected(false);
+        };
+
+        socket.on('connect', handleReconnect);
+        socket.on('disconnect', handleDisconnect);
+
+        if(socket.connected) handleReconnect(); // If already connected via socket, join immediately
+
 
         ydoc.on('update', (update, origin) => {
             if (origin !== 'server') socket.emit('yjs-update', projectId, update);
         });
+
+        //  socket.on('connect', () => {
+        //     setIsConnected(true);
+        //     socket.emit("join-document", projectId);
+        // });
+
+        // socket.on('disconnect', () => setIsConnected(false));
 
         awareness.on('update', ({ added, updated, removed }, origin) => {
             if (origin !== 'server') {
@@ -388,12 +421,7 @@ const EditorRoom = () => {
             }
         });
 
-        socket.on('yjs-awareness', (data) => {
-            try {
-                const binaryData = parseSocketData(data);
-                if (binaryData && binaryData.length > 0) awarenessProtocol.applyAwarenessUpdate(awareness, binaryData, 'server');
-            } catch (error) { console.error("Awareness Error:", error); }
-        });
+
 
         const updateOnlineUsers = () => {
             const states = Array.from(awareness.getStates().values());
@@ -411,25 +439,34 @@ const EditorRoom = () => {
 
         return () => {
             if (awarenessRef.current) awarenessRef.current.destroy(); 
-            socket.disconnect();
             if (binding) binding.destroy();
             ydoc.destroy();
+
+            socket.emit('leave-document', projectId);
+            socket.off('connect', handleReconnect);
+            socket.off('yjs-init', handleInit);
+            socket.off('yjs-update', handleUpdate);
+            socket.off('yjs-awareness', handleAwareness);
+            socket.off('disconnect', handleDisconnect);
+
+
             ydocRef.current = null;
             awarenessRef.current = null;
             quillInstance.current = null;
             if (editorRef.current) editorRef.current.innerHTML = '';
         };
 
-    }, [projectId, user?._id, user?.name]); 
+    }, [projectId, user?._id, user?.name, socket]); 
 
     // 🌟 TRAP 2 CURE: FAST AUTO-SAVE
+// 🌟 VERSION CONTROL AUTO-SAVE (10 Minutes)
     useEffect(() => {
         if(!ydocRef.current) return;
 
         const metadata = ydocRef.current.getMap('metadata');
         if(!metadata.has('lastSavedTime')){ metadata.set('lastSavedTime', Date.now()); }
 
-        // Interval checks every 30 seconds
+        // Interval checks every 10 minutes (600,000 ms)
         const pulseInterval = setInterval(async() => {
             if(!ydocRef.current || !awarenessRef.current) return;
 
@@ -437,8 +474,8 @@ const EditorRoom = () => {
             const now = Date.now();
             const timeSinceLastSave = now - lastSavedTime;
             
-            // 🌟 THE FIX: Ensure it actually saves every 30 seconds instead of 10 minutes!
-            if(timeSinceLastSave < 30000) return; 
+            // 🌟 10 Minutes = 600,000 milliseconds
+            if(timeSinceLastSave < 600000) return; 
             
             const connectedClients = Array.from(awarenessRef.current.getStates().keys());
             const leaderId = Math.min(...connectedClients);
@@ -457,9 +494,10 @@ const EditorRoom = () => {
                 setVersionRefreshTrigger(prev => prev + 1);
             } catch (error) { console.error("Auto-save failed:", error); }
             
-        }, 30000); // 30 seconds
+        }, 600000); // 🌟 10 Minutes
+        
         return () => clearInterval(pulseInterval);
-    }, [projectId]);
+    }, [projectId, user?._id, user?.name, socket]);
 
     return (
         <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>

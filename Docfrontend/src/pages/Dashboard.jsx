@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axiosSetup';
+// import {useSocket} from '../context/SocketContext'; // <-- Import the useSocket hook
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  // const socket = useSocket(); // 🌟 GRAB GLOBAL SOCKET
 
   // --- STATE ---
   const [projects, setProjects] = useState([]);
@@ -36,6 +38,19 @@ export default function Dashboard() {
 
     fetchProjects();
   }, []);
+
+  // useEffect(() => {
+  //   if (!socket) return; // Wait for socket to be initialized
+  //   const handleNewInvite = (data)=>{
+  //     alert(data.message || "You have a new project invite!");
+  //     setPendingInvites((prev) => [data.invite, ...prev]);
+  //   };
+  //   socket.on("new-invite", handleNewInvite);
+
+  //   return () => {
+  //     socket.off("new-invite", handleNewInvite);
+  //   }
+  // }, [socket]) // 🌟 OPTIONAL: You can listen for socket connection changes if needed;
 
   // --- CREATE NEW PROJECT ---
   const handleCreateProject = async (e) => {

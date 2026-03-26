@@ -34,6 +34,7 @@ export const initializeSocket = (httpServer) => {
         .filter(Boolean);
 
     const io = new Server(httpServer, {
+        maxHttpBufferSize: 1e8, // 100 MB
         cors:{
             origin : allowedOrigins,
             methods: ["GET", "POST"]
@@ -58,6 +59,10 @@ export const initializeSocket = (httpServer) => {
 
     // 🟢 2. Handle Connections
     io.on('connection', (socket) => {
+
+        //personlaize notifications by joining a room with the user's ID
+        socket.join(socket.userId.toString());
+
         let currentRoom = null;
 
         socket.on("join-document", async (projectId) => {
@@ -89,7 +94,7 @@ export const initializeSocket = (httpServer) => {
 
                 const serverDoc = activeDocuments.get(projectId).doc;
                 const stateVector = Y.encodeStateAsUpdate(serverDoc);
-                socket.emit("yjs-init", stateVector);
+                socket.emit("yjs-init", projectId ,stateVector); // here we update the project id
             }catch(error) {
                 console.error("Error joining document:", error);
                 socket.emit("error", "An error occurred while joining the document.");
@@ -97,7 +102,7 @@ export const initializeSocket = (httpServer) => {
         });   
         
         socket.on("yjs-update", (projectId, update) => {
-            socket.to(projectId).emit("yjs-update", update);// Broadcast the update to other clients in the same room
+            socket.to(projectId).emit("yjs-update", projectId, update);// Broadcast the update to other clients in the same room
 
             //applyq the update to the server's Yjs document
             const roomdata = activeDocuments.get(projectId);
@@ -110,7 +115,7 @@ export const initializeSocket = (httpServer) => {
 
         socket.on("yjs-awareness",(projectId, awarenessData) => {
             // Handle awareness updates
-            socket.to(projectId).emit("yjs-awareness", awarenessData);
+            socket.to(projectId).emit("yjs-awareness", projectId, awarenessData);
         });
 
         // socket.on("disconnect",async() => {
@@ -130,6 +135,37 @@ export const initializeSocket = (httpServer) => {
         //         }
         //     }
         // });
+
+        socket.on("leave-document", async (projectId) => {
+            socket.leave(projectId);
+            currentRoom = null;
+            if(activeDocuments.has(projectId)) {
+                const roomdata = activeDocuments.get(projectId);
+                roomdata.clients.delete(socket.id);
+                if(roomdata.clients.size === 0) {
+                    if(roomdata.isDirty) {
+                        try{
+                            const stateVector = Y.encodeStateAsUpdate(roomdata.doc);
+                            await Project.findByIdAndUpdate(projectId, {
+                                documentData: Buffer.from(stateVector)
+                            });
+                            console.log(`Project ${projectId} saved to database on last client leave.`);
+                            roomdata.isDirty = false; // Mark as clean after saving
+                        }catch(error) {
+                            console.error(`Error saving project ${projectId} on last client leave:`, error);
+                        }
+                    }
+                    if(roomdata.clients.size === 0) {
+                        activeDocuments.delete(currentRoom);
+                        console.log(`Project ${currentRoom} removed from memory as no clients are connected.`);
+                    } else {
+                        console.log(`Project ${currentRoom} kept in memory (User rejoined during save).`);
+                    }
+
+                }
+            }
+        });
+
         socket.on("disconnect", async () => {
             if(currentRoom && activeDocuments.has(currentRoom)) {
                 const roomdata = activeDocuments.get(currentRoom);
@@ -168,43 +204,52 @@ export const initializeSocket = (httpServer) => {
         // MULTIPLEXED TLDRaw ROUTING
         // ==========================================
 
-        socket.on('join-tldraw-room', (roomName ) => {
-            socket.join(roomName);
-            console.log(`Socket ${socket.id} joined tldraw room: ${roomName}`);
+        // ==========================================
+        // MULTIPLEXED TLDRaw ROUTING (BULLETPROOFED)
+        // ==========================================
+
+        socket.on('join-tldraw-room', (roomName) => {
+            try {
+                socket.join(roomName);
+            } catch (error) { console.error("Error joining tldraw room:", error); }
         });
 
         socket.on('leave-tldraw-room', (roomName) => {
-            socket.leave(roomName);
-            console.log(`Socket ${socket.id} left tldraw room: ${roomName}`);
+            try {
+                socket.leave(roomName);
+            } catch (error) { console.error("Error leaving tldraw room:", error); }
         });
 
         socket.on('request-tldraw-sync', async (roomName) => {
-            console.log(`Received tldraw sync request from ${socket.id} for room: ${roomName}`);
-            const socketsInRoom  = await io.in(roomName).fetchSockets();
-            const otherusers = socketsInRoom.filter(s => s.id !== socket.id);
-            if(otherusers.length > 0) {
-                const designatedSender = otherusers[0]; // Just pick the first one we find
-                console.log(`Forwarding direct sync request from ${socket.id} to ${designatedSender.id} in room: ${roomName}`);
-                io.to(designatedSender.id).emit('send-direct-tldraw-sync', socket.id); // Ask the designated sender to send a direct sync to the requester
-            }
+            try {
+                const socketsInRoom = await io.in(roomName).fetchSockets();
+                const otherusers = socketsInRoom.filter(s => s.id !== socket.id);
+                if(otherusers.length > 0) {
+                    const designatedSender = otherusers[0];
+                    io.to(designatedSender.id).emit('send-direct-tldraw-sync', socket.id);
+                }
+            } catch (error) { console.error("Error requesting tldraw sync:", error); }
         });
 
         socket.on('direct-tldraw-sync', ({ targetId, roomName, updateData }) => {
-            const room = io.sockets.adapter.rooms.get(roomName);
-            console.log(`Received direct sync data from ${socket.id} for target ${targetId} in room: ${roomName}`);
-            if (room && room.has(targetId) && room.has(socket.id)) {
-                const incomingDrawingId = roomName.replace('drawing_', '');
-            io.to(targetId).emit('tldraw-update', { incomingDrawingId, updateData });
-            }
+            try {
+                const room = io.sockets.adapter.rooms.get(roomName);
+                if (room && room.has(targetId) && room.has(socket.id)) {
+                    const incomingDrawingId = roomName.replace('drawing_', '');
+                    io.to(targetId).emit('tldraw-update', { incomingDrawingId, updateData });
+                }
+            } catch (error) { console.error("Error sending direct tldraw sync:", error); }
         });
 
-        // 4. standard Live Drawing Broadcast
         socket.on('tldraw-update', ({ roomName, drawingId, updateData }) => {
-            socket.to(roomName).emit('tldraw-update', { 
-                incomingDrawingId: drawingId,
-                updateData 
-            }); // Broadcast the update to other clients in the same room
+            try {
+                socket.to(roomName).emit('tldraw-update', { 
+                    incomingDrawingId: drawingId,
+                    updateData 
+                });
+            } catch (error) { console.error("Error broadcasting tldraw update:", error); }
         });
+
     });
 
 }

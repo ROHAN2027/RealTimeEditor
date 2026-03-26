@@ -10,6 +10,7 @@ projectRouter.use(authMiddleware); // Apply auth middleware to all routes in thi
 projectRouter.post('/', projectController.createProject);
 projectRouter.get('/', projectController.getProjects);
 projectRouter.get('/:projectId', requireProjectAccess, projectController.getProjectById);
+
 projectRouter.delete('/:projectId', requireProjectOwnership, projectController.deleteProject);
 projectRouter.put('/:projectId', requireProjectOwnership, projectController.updateProject);
 projectRouter.delete('/:projectId/collaborators/:collaboratorId', requireProjectOwnership, projectController.removeCollaborator);

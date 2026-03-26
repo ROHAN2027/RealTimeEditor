@@ -40,6 +40,7 @@
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext'; // <-- Import the SocketProvider
 import ProtectedRoute from './components/comman/ProtectedRoute';
 import PublicRoute from './components/comman/publicRoute'; // Note: Ensure casing matches your file exactly!
 import AxiosInterceptor from './components/comman/AxiosInterceptor';
@@ -55,10 +56,11 @@ function App() {
     // 1. BrowserRouter must be the absolute top-level wrapper
     <BrowserRouter>
       <AuthProvider>
-        <AxiosInterceptor>
-          <Routes>
-            
-            {/* --- PUBLIC ROUTES --- */}
+        <SocketProvider> {/* 2. SocketProvider should wrap around all components that need socket access */}
+          <AxiosInterceptor>
+            <Routes>
+              
+              {/* --- PUBLIC ROUTES --- */}
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={
               <PublicRoute>
@@ -93,8 +95,9 @@ function App() {
               </div>
             } />
 
-          </Routes>
-        </AxiosInterceptor>
+            </Routes>
+          </AxiosInterceptor>
+        </SocketProvider>
       </AuthProvider>
     </BrowserRouter>
   );

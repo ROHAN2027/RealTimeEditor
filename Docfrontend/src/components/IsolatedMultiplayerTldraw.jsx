@@ -17,6 +17,7 @@ const IsolatedMultiplayerTldraw = ({ drawingId ,projectId , onMount , isolatedYd
         const tempDoc = new Y.Doc();
         const tempMap = tempDoc.getMap('tldraw-data');
 
+
         if(isolatedYdocRef) {
             isolatedYdocRef.current = tempDoc;
         }
@@ -77,26 +78,75 @@ const IsolatedMultiplayerTldraw = ({ drawingId ,projectId , onMount , isolatedYd
             });
         };
 
-        const handleIncomingUpdate =({incomingDrawingId, updateData})=>{
-            if(incomingDrawingId !== drawingId) return; // Ignore updates for other drawings
-            Y.applyUpdate(tempDoc,new Uint8Array(updateData),'server'); // Apply incoming updates to the isolated Yjs document
-            console.log(`🔄 Received update for drawingId: ${incomingDrawingId}, applying to isolated Yjs document.`);
+// ==========================================
+        // 🌟 1. THE ECHO LOCK (Mutex)
+        // ==========================================
+        let isApplyingRemoteUpdate = false;
+
+
+        const handleIncomingUpdate = ({incomingDrawingId, updateData}) => {
+            if(incomingDrawingId !== drawingId) return;
+            
+            // 🔒 1. LOCK THE BROADCASTER
+            isApplyingRemoteUpdate = true;
+
+            try {
+                let parsedData;
+                if (updateData && updateData.type === 'Buffer' && Array.isArray(updateData.data)) {
+                    parsedData = new Uint8Array(updateData.data);
+                } else {
+                    parsedData = new Uint8Array(updateData);
+                }
+
+                if (parsedData && parsedData.length > 0) {
+                    Y.applyUpdate(tempDoc, parsedData, 'server'); 
+                }
+            } catch (error) {
+                console.error("Error applying incoming tldraw sync:", error);
+            } 
+            
+            // 🔓 2. THE ZERO-MILLISECOND UNLOCK
+            // requestAnimationFrame waits for the exact moment the browser finishes 
+            // painting the new drawing to the screen, guaranteeing the echo has passed.
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    isApplyingRemoteUpdate = false;
+                }, 0);
+            });
         }
 
         mainSocket.on('send-direct-tldraw-sync', handleSendDirectSync);
         mainSocket.on('tldraw-update', handleIncomingUpdate);
 
+        // ==========================================
+        // 🌟 2. BATCHED BROADCASTER WITH LOCK CHECK
+        // ==========================================
+        let pendingUpdates = [];
+        let batchTimeout = null;
+
         tempDoc.on('update', (update, origin) => {
-            if (origin === 'server') {
-                return;
+            if (origin === 'server') return;
+            
+            // 🛑 IF THE LOCK IS ACTIVE, DO NOT ECHO!
+            if (isApplyingRemoteUpdate) return; 
+
+            pendingUpdates.push(update);
+
+            if (!batchTimeout) {
+                batchTimeout = setTimeout(() => {
+                    if (pendingUpdates.length > 0) {
+                        const mergedUpdate = Y.mergeUpdates(pendingUpdates);
+                        mainSocket.emit('tldraw-update', { 
+                            roomName: roomName, 
+                            drawingId : drawingId, 
+                            updateData : mergedUpdate 
+                        });
+                        pendingUpdates = [];
+                    }
+                    batchTimeout = null;
+                }, 50); // 20 Frames Per Second (Smooth and Network Friendly)
             }
-            console.log(`📤 Local update detected in isolated Yjs document for drawingId: ${drawingId}, broadcasting to room: ${roomName}`)
-            mainSocket.emit('tldraw-update', { 
-                roomName:roomName, 
-                drawingId : drawingId, 
-                updateData : update 
-            });
-        } );
+        });
         
 
         
@@ -108,6 +158,21 @@ const IsolatedMultiplayerTldraw = ({ drawingId ,projectId , onMount , isolatedYd
         // ==========================================
         return () => {
             console.log(`cleaning up isolated RAM for drawingId: ${drawingId}, projectId: ${projectId}`);
+            if(batchTimeout) {
+                clearTimeout(batchTimeout);
+            }
+            
+
+            if(pendingUpdates.length > 0) {
+                const finalMergedUpdate = Y.mergeUpdates(pendingUpdates);
+                console.log(`📤 Sending final batch of updates before cleanup for drawingId: ${drawingId}`);
+                mainSocket.emit('tldraw-update', { 
+                    roomName:`drawing_${drawingId}`, 
+                    drawingId : drawingId, 
+                    updateData : finalMergedUpdate 
+                });
+                pendingUpdates = [];
+            }
             const cleanupRoomName = `drawing_${drawingId}`;
             mainSocket.emit('leave-tldraw-room', cleanupRoomName);
             mainSocket.off('send-direct-tldraw-sync', handleSendDirectSync);
