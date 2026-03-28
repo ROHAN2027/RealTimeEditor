@@ -128,8 +128,23 @@ export const getProjectById = async (req, res) => {
 
 export const deleteProject = async (req, res) => {
     try {
+        // 🌟 1. Grab the ID before we delete the project!
+        const projectIdString = req.project._id.toString();
         // 1. Instantly delete the document we already have in memory
         await req.project.deleteOne();
+        // 🌟 2. NEW: Delete all versions associated with this project to free up database space!
+        await ProjectVersion.deleteMany({ projectId: req.project._id });
+
+        // 🌟 NEW: THE NUKE BROADCAST
+        const io = req.app.get('io');
+        if (io) {
+            // 1. Tell EVERYONE currently looking at this project that it was deleted, kicking them to Dashboard
+            io.to(projectIdString).emit('kicked-from-project', projectIdString);
+            
+            // 2. Tell the Owner's other tabs to remove it from their Sidebar/Dashboard lists
+            io.to(req.userId.toString()).emit('user-projects-updated');
+        }
+
         return res.status(200).json({
             success: true,
             message: "Project deleted successfully"
@@ -151,6 +166,15 @@ export const updateProject = async (req, res) => {
         if(name) project.name = name;
         if(description) project.description = description;
         await project.save();
+
+        const io = req.app.get('io');
+        if (io) {
+            // Tell everyone looking at the project to update the name/desc in their sidebar
+            io.to(project._id.toString()).emit('project-updated');
+            // Tell the Owner's other tabs to update the name/desc on the Dashboard
+            io.to(req.userId.toString()).emit('user-projects-updated');
+        }
+
         return res.status(200).json({
             success: true,
             message: "Project updated successfully",
@@ -189,6 +213,18 @@ export const removeCollaborator = async (req, res) => {
             project.type = 'individual';
         }
         await project.save();
+
+        // 🌟 NEW: THE FORCE KICK BROADCAST
+        const io = req.app.get('io');
+        if (io) {
+            // Tell everyone in the room to refresh their sidebar
+            io.to(project._id.toString()).emit('project-updated');
+            // Tell the specific user they were kicked so their app forces them out
+            io.to(collaboratorId.toString()).emit('kicked-from-project', project._id.toString());
+            // 🌟 ADD THIS: Tell the Owner's other tabs to refresh their collaborator count!
+            io.to(req.userId.toString()).emit('user-projects-updated');
+        }
+
         return res.status(200).json({
             success: true,
             message: "Collaborator removed successfully",
@@ -216,6 +252,20 @@ export const leaveProject = async (req, res) => {
         }
         project.collaborators.pull(currentUserId);
         await project.save();
+
+        // 🌟 NEW: THE LEAVE BROADCAS
+        const io = req.app.get('io');
+        if (io) {
+            // 1. Tell the REMAINING collaborators to update their sidebars
+            io.to(project._id.toString()).emit('project-updated');
+            
+            // 2. Tell ALL of YOUR open tabs to boot you out if you have this specific Editor Room open
+            io.to(currentUserId.toString()).emit('kicked-from-project', project._id.toString());
+            
+            // 3. Tell ALL of YOUR open tabs (like the Dashboard) to refresh the project lists
+            io.to(currentUserId.toString()).emit('user-projects-updated');
+        }
+
         return res.status(200).json({
             success: true,
             message: "You have successfully left the project."

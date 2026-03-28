@@ -12,7 +12,7 @@ import drawingRoutes from "./router/drawingRoutes.js";
 
 await connectDB();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 const app = express();
 
 app.use(cors());
@@ -29,7 +29,8 @@ app.use((err, req, res, next) => {
     });
 });
 const httpServer = http.createServer(app);
-initializeSocket(httpServer);
+const io = initializeSocket(httpServer);
+app.set('io', io);
 httpServer.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

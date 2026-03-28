@@ -251,5 +251,6 @@ export const initializeSocket = (httpServer) => {
         });
 
     });
+    return io;
 
 }

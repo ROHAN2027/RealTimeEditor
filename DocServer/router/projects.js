@@ -13,8 +13,8 @@ projectRouter.get('/:projectId', requireProjectAccess, projectController.getProj
 
 projectRouter.delete('/:projectId', requireProjectOwnership, projectController.deleteProject);
 projectRouter.put('/:projectId', requireProjectOwnership, projectController.updateProject);
-projectRouter.delete('/:projectId/collaborators/:collaboratorId', requireProjectOwnership, projectController.removeCollaborator);
 projectRouter.delete('/:projectId/collaborators/me', requireProjectAccess, projectController.leaveProject);
+projectRouter.delete('/:projectId/collaborators/:collaboratorId', requireProjectOwnership, projectController.removeCollaborator);
 projectRouter.post('/:projectId/collaborators', requireProjectOwnership, invitationController.sendInvitation);
 projectRouter.get('/:projectId/invites', requireProjectOwnership, invitationController.getProjectInvitations);
 

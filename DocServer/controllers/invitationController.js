@@ -22,6 +22,19 @@ export const sendInvitation = async (req, res) => {
             receiverId: receiver._id
         });
         await newInvitation.save();
+
+        // 🌟 LIVE NOTIFICATION BROADCAST
+        // Fetch it again to populate the sender and project names for the UI
+        const io = req.app.get('io');
+        if (io) {
+            const populatedInvite = await Invitation.findById(newInvitation._id)
+                .populate('senderId', 'name email')
+                .populate('projectId', 'name');
+            
+            // Emit directly to the receiver's private room
+            io.to(receiver._id.toString()).emit('new-invite', populatedInvite);
+        }
+
         return res.status(200).json({
             success: true,
             message: "Invitation sent successfully"
@@ -169,10 +182,28 @@ export const respondToInvitation = async (req, res) => {
             });
         }
 
+        // 🌟 Save the sender's ID before we delete the document!
+        const senderIdString = invitation.senderId.toString();
+
         // Update the invitation status
         await invitation.deleteOne();
         // invitation.status = response;
         // await invitation.save();
+
+        // 🌟 LIVE NOTIFICATION: Tell the Sender's sidebar to remove the invite!
+        // 🌟 LIVE NOTIFICATION: Tell the Sender's sidebar to remove the invite!
+        const io = req.app.get('io');
+        if (io) {
+            // 1. Tell the OWNER's sidebar to remove the "Revoke" button
+            io.to(senderIdString).emit('invite-responded', { inviteId, response });
+            
+            // 2. 🌟 NEW: Tell ALL of the Receiver's open tabs to refresh their project list!
+            if (response === 'accepted') {
+                io.to(req.userId.toString()).emit('user-projects-updated');
+            }
+            // 3. 🌟 NEW: Tell ALL of the Receiver's open tabs to hide this invite card!
+            io.to(req.userId.toString()).emit('invite-resolved-self', inviteId);
+        }
 
         return res.status(200).json({
             success: true,
@@ -229,6 +260,11 @@ export const unsendInvitation = async (req, res) => {
                 success: false,
                 message: "Invitation not found or cannot be unsent."
             });
+        }
+
+        const io = req.app.get('io');
+        if(io){
+            io.to(invitation.receiverId.toString()).emit('invite-cancelled', inviteId);        
         }
 
         return res.status(200).json({

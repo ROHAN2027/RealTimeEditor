@@ -2,12 +2,14 @@ import { useState, useEffect, use } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axiosSetup';
-// import {useSocket} from '../context/SocketContext'; // <-- Import the useSocket hook
+import {useSocket} from '../context/SocketContext'; // <-- Import the useSocket hook
+
+import InvitationsList from '../components/InvitationsList'; // 🌟 IMPORT THE NEW COMPONENT
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  // const socket = useSocket(); // 🌟 GRAB GLOBAL SOCKET
+  const socket = useSocket(); // 🌟 GRAB GLOBAL SOCKET
 
   // --- STATE ---
   const [projects, setProjects] = useState([]);
@@ -20,37 +22,54 @@ export default function Dashboard() {
   const [newProjectType, setNewProjectType] = useState('individual');
   const [isCreating, setIsCreating] = useState(false);
 
-  // --- FETCH PROJECTS ON LOAD ---
+// 🌟 FIX: Moved the function outside so the whole component can use it!
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem('jwt_token');
+      const response = await api.get('/projects', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setProjects(response.data?.projects || []);
+    } catch (error) {
+      console.error("Failed to fetch projects", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const token = localStorage.getItem('jwt_token');
-        const response = await api.get('/projects', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setProjects(response.data?.projects || []);
-      } catch (error) {
-        console.error("Failed to fetch projects", error);
-      } finally {
-        setIsLoading(false);
-      }
+    fetchProjects();
+  }, []); // It now just calls the function when the page loads
+
+  useEffect(() => {
+    if (!socket) return; 
+
+    // Instantly hide the project card if revoked
+    const handleKicked = (kickedProjectId) => {
+        setProjects(prev => prev.filter(p => p._id !== kickedProjectId));
     };
 
-    fetchProjects();
-  }, []);
+    // 2. 🌟 NEW: Refresh the dashboard if a project was added/joined in another tab!
+    const handleMyProjectsUpdated = () => {
+        fetchProjects(); 
+    };
 
-  // useEffect(() => {
-  //   if (!socket) return; // Wait for socket to be initialized
-  //   const handleNewInvite = (data)=>{
-  //     alert(data.message || "You have a new project invite!");
-  //     setPendingInvites((prev) => [data.invite, ...prev]);
-  //   };
-  //   socket.on("new-invite", handleNewInvite);
+    // When the backend says "Hey, you accepted this in another tab!"
+    const handleInviteResolvedSelf = (resolvedInviteId) => {
+      // Instantly delete it from the screen WITHOUT doing a full API refetch!
+        setInvitations((prev) => prev.filter(invite => invite._id !== resolvedInviteId));
+    };
 
-  //   return () => {
-  //     socket.off("new-invite", handleNewInvite);
-  //   }
-  // }, [socket]) // 🌟 OPTIONAL: You can listen for socket connection changes if needed;
+    socket.on('invite-resolved-self', handleInviteResolvedSelf);
+    socket.on('kicked-from-project', handleKicked);
+    socket.on('user-projects-updated', handleMyProjectsUpdated);
+
+    return () => {
+      socket.off('user-projects-updated', handleMyProjectsUpdated);
+      socket.off('kicked-from-project', handleKicked);
+      socket.off('invite-resolved-self', handleInviteResolvedSelf);
+    }
+  }, [socket]);
 
   // --- CREATE NEW PROJECT ---
   const handleCreateProject = async (e) => {
@@ -125,6 +144,10 @@ export default function Dashboard() {
             + New Project
           </button>
         </div>
+
+        {/* 🌟 MOUNT THE INVITATIONS LIST HERE! */}
+        {/* We pass fetchProjects so if they click "Accept", the projects grid updates instantly! */}
+        <InvitationsList onProjectJoined={fetchProjects} />
 
         {/* Loading State */}
         {isLoading ? (

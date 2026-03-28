@@ -290,7 +290,7 @@ const EditorRoom = () => {
         awarenessRef.current = awareness;
 
         awareness.setLocalStateField('user', {
-            _id: user?._id,
+            _id: user?._id || user?.id,
             name: user?.name || 'Anonymous',
             color: getColorFromUserId(user?._id)
         });
@@ -382,6 +382,28 @@ const EditorRoom = () => {
         
         socket.on('yjs-awareness', handleAwareness);
 
+        // 🌟 THE BOUNCER (Boot them out if the owner kicks them)
+        const handleKicked = (kickedProjectId) => {
+            if (kickedProjectId === projectId) {
+                // 1. 🌟 INSTANTLY wipe their green dot from everyone else's screen!
+                if (awarenessRef.current) awarenessRef.current.setLocalState(null);
+                
+                // 🌟 ADD THIS 1 LINE: Instantly kill their socket connection so they vanish from the owner's screen!
+                socket.disconnect(); 
+                
+                // Then show the freezing alert
+                alert("Your access to this project has been revoked by the owner.");
+                window.location.href = '/dashboard'; // Hard redirect
+            }
+        };
+        socket.on('kicked-from-project', handleKicked);
+
+        // 🌟 NEW: REFRESH SIDEBAR IF SOMEONE ELSE LEAVES
+        const handleProjectUpdated = () => {
+            setVersionRefreshTrigger(prev => prev + 1); // Triggers the sidebar to re-fetch!
+        };
+        socket.on('project-updated', handleProjectUpdated);
+
         const handleReconnect = () => {
             setIsConnected(true);
             socket.emit("join-document", projectId);
@@ -408,6 +430,12 @@ const EditorRoom = () => {
 
         // socket.on('disconnect', () => setIsConnected(false));
 
+        const handleSocketError = (errorMessage) => {
+            alert(errorMessage || "Failed to join project.");
+            window.location.href = '/dashboard'; // Kick them back to safety
+        };
+        socket.on('error', handleSocketError);
+
         awareness.on('update', ({ added, updated, removed }, origin) => {
             if (origin !== 'server') {
                 const changedClients = added.concat(updated, removed);
@@ -424,31 +452,77 @@ const EditorRoom = () => {
 
 
         const updateOnlineUsers = () => {
-            const states = Array.from(awareness.getStates().values());
-            const users = states.map(state => ({
-                id: state.user?._id,
-                name: state.user?.name || 'Anonymous',
-                color: state.user?.color || '#000000',
-                isMe: state.user?.name === user?.name
-            })).filter(u => u.id); 
-            setOnlineUsers(users);
+            const localClientId = awareness.clientID; 
+            const stateEntries = Array.from(awareness.getStates().entries()); 
+            
+            const uniqueUsersMap = new Map();
+
+            stateEntries.forEach(([clientId, state]) => {
+                if (!state.user) return; // Skip empty ghost states
+
+                // 🌟 THE FIX: Grab the ID and FORCE it to be a strict String!
+                const rawId = state.user._id || state.user.id;
+                if (!rawId) return;
+                const dbId = String(rawId); 
+
+                const isThisSpecificTab = (clientId === localClientId);
+
+                if (uniqueUsersMap.has(dbId)) {
+                    // Agar ye insaan list mein already hai, bas check karo ki kya ye wahi exact tab hai
+                    if (isThisSpecificTab) {
+                        uniqueUsersMap.get(dbId).isMe = true;
+                    }
+                } else {
+                    // Pehli baar list mein add kar rahe hain
+                    uniqueUsersMap.set(dbId, {
+                        id: dbId, // String ID use kar rahe hain
+                        name: state.user.name || 'Anonymous',
+                        color: state.user.color || '#000000',
+                        isMe: isThisSpecificTab
+                    });
+                }
+            });
+            
+            setOnlineUsers(Array.from(uniqueUsersMap.values()));
         };
 
         awareness.on('change', updateOnlineUsers);
         updateOnlineUsers(); 
 
+        // 🌟 NEW: THE BROWSER REFRESH CATCHER
+        // This fires the exact millisecond the user clicks "Reload" or closes the tab
+        const handleBeforeUnload = () => {
+            // 1. Instantly erase this specific tab's "ghost" from the Yjs network
+            if (awarenessRef.current) {
+                awarenessRef.current.setLocalState(null);
+            }
+            // 2. Sever the socket cleanly
+            if (socket) {
+                socket.emit("leave-document", projectId);
+                socket.disconnect();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
         return () => {
-            if (awarenessRef.current) awarenessRef.current.destroy(); 
+            if (awarenessRef.current) {
+                awarenessRef.current.setLocalState(null);
+            }
             if (binding) binding.destroy();
             ydoc.destroy();
 
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            
             socket.emit('leave-document', projectId);
             socket.off('connect', handleReconnect);
             socket.off('yjs-init', handleInit);
             socket.off('yjs-update', handleUpdate);
             socket.off('yjs-awareness', handleAwareness);
             socket.off('disconnect', handleDisconnect);
-
+            socket.off('kicked-from-project', handleKicked);
+            socket.off('project-updated', handleProjectUpdated);
+            socket.off('error', handleSocketError);
 
             ydocRef.current = null;
             awarenessRef.current = null;
