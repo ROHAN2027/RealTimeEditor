@@ -14,10 +14,7 @@ export default function VersionPreviewModal({projectId, versionId, onClose,onRes
     useEffect(() => {
         const fetchVersion = async () => {
             try{
-                const token = localStorage.getItem('jwt_token');
-                const res = await api.get(`/projects/${projectId}/versions/${versionId}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api.get(`/projects/${projectId}/versions/${versionId}`);
                 const data =res.data.version;
                 setVersionData(data);
 

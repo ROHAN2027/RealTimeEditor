@@ -10,29 +10,36 @@ export const SocketProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
     const { user } = useAuth();
 
-    useEffect(() => {
-        const token = localStorage.getItem('jwt_token');
-        let newSocket;
-        if(user && token){
-            const backendURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-            newSocket = io(backendURL,{auth : {token}});
-            setSocket(newSocket);
-        }else if(socket){
-            
+useEffect(() => {
+        // If there is no user, just clear the state and do nothing else.
+        if (!user?._id) {
             setSocket(null);
+            return;
         }
-        // | Condition    | Action             |
-        // | ------------ | ------------------ |
-        // | user exists  | create socket      |
-        // | user removed | destroy socket     |
-        // | user changes | cleanup old socket |
-        // 🌟 Bulletproof Cleanup
+
+        // 1. Create the socket
+        const backendURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+        const newSocket = io(backendURL, {
+            withCredentials: true,
+        });
+
+        // 🌟 2. ERROR HANDLING: Catch cookie rejections or server issues
+        newSocket.on("connect_error", (err) => {
+            console.error("Socket Connection Error:", err.message);
+            // If you want, you could trigger your logout() function here 
+            // if err.message === "Authentication error: Invalid or expired token"
+        });
+
+        // 3. Save it to state
+        setSocket(newSocket);
+
+        // 🌟 4. BULLETPROOF CLEANUP
+        // This automatically runs the exact millisecond the user logs out or the component unmounts.
         return () => {
-            if (newSocket) {
-                newSocket.disconnect();
-            }
+            newSocket.disconnect(); // Kills the network connection
+            setSocket(null);        // Clears the React state
         };
-        // 🌟 Depend on the ID string, not the whole object, to prevent unwanted re-renders!
+        
     }, [user?._id]);
 
     return (

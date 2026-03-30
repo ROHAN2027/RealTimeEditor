@@ -11,10 +11,7 @@ export default function InvitationsList({ onProjectJoined }) {
     useEffect(() => {
         const fetchInvitations = async () => {
             try{
-                const token = localStorage.getItem('jwt_token');
-                const response = await api.get('/invites', { // 🌟 FIX: Added leading slash
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const response = await api.get('/invites');
                 setInvitations(response.data?.invitations || []);
             } catch (error) {
                 console.error('Error fetching invitations:', error);
@@ -55,10 +52,7 @@ export default function InvitationsList({ onProjectJoined }) {
 
     const handleResponse = async (inviteId, responseType) => {
         try {
-            const token = localStorage.getItem('jwt_token');
-            await api.post(`/invites/${inviteId}`, { response: responseType }, { // 🌟 FIX: Added leading slash
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post(`/invites/${inviteId}`, { response: responseType });
             setInvitations((prev) => prev.filter(invite => invite._id !== inviteId));
             
             // 🌟 FIX: Checked for 'accepted' to match your backend and buttons

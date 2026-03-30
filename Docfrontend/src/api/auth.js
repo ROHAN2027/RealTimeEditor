@@ -24,7 +24,7 @@ export const loginUser = async (credentials) => {
     try {
         const response = await api.post('/auth/login', credentials);
         return response.data;
-        // "message": "Login successful", "token": "<JWT_TOKEN>" and "user": { ...userData } 
+        // "message": "Login successful","user": { ...userData } 
     } catch (error) {
         console.error('Error logging in user:', error);
         throw error;
@@ -38,19 +38,25 @@ export const loginUser = async (credentials) => {
 
 export const fetchUserProfile = async () => {
     try {
-        const token = localStorage.getItem('jwt_token');
-        if (!token) {
-            throw new Error('No token found');
-        }
-        const response = await api.get('/auth/profile', {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        });
+        const response = await api.get('/auth/profile');
         return response.data;
         // "message": "Profile retrieved successfully", "user": { ...userData }
     } catch (error) {
         console.error('Error fetching user profile:', error);
+        throw error;
+    }
+};
+
+/**
+ * 🌟 4. NEW: Log out the user
+ * Tells the backend to destroy the HTTP-Only cookie vault.
+ */
+export const logoutUser = async () => {
+    try {
+        const response = await api.post('/auth/logout');
+        return response.data;
+    } catch (error) {
+        console.error('Error logging out:', error);
         throw error;
     }
 };

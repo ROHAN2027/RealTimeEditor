@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from 'cookie-parser';
 import connectDB from "./config/db.js";
 import authRoutes from './router/auth.js';
 import projectRoutes from './router/projects.js';
@@ -9,14 +10,25 @@ import { initializeSocket } from './socket.js';
 import imgRouter from "./router/imgUpload.js";
 import drawingRoutes from "./router/drawingRoutes.js";
 
+const allowedOrigins = process.env.CLIENT_URLS 
+    ? process.env.CLIENT_URLS.split(',').map(url => url.trim()) 
+    : ['http://localhost:5173', 'http://localhost:3000'];
 
 await connectDB();
 
 const PORT = process.env.PORT || 5000;
 const app = express();
 
-app.use(cors());
+app.use(cors(
+    {
+        origin : allowedOrigins,
+        credentials : true
+    }
+));
+
 app.use(express.json());
+app.use(cookieParser());
+
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/invites', invitationRoutes);

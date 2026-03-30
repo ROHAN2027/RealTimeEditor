@@ -40,8 +40,8 @@ export default function Login() {
         data = await loginUser({ email: formData.email, password: formData.password });
       }
 
-      // Success! Pass the token and user data to our global AuthContext
-      login(data.token, data.user);
+      // Success! Pass user data to our global AuthContext
+      login(data.user);
       
       // Smoothly redirect to the dashboard
       navigate('/dashboard');

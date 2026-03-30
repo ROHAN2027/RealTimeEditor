@@ -2,6 +2,7 @@ import {Server} from 'socket.io';
 import jwt from 'jsonwebtoken';
 import * as Y from 'yjs';
 import Project from './models/Project.js';
+import cookie from 'cookie';
 
 
 // 🧠 THE RAM BUFFER
@@ -37,13 +38,21 @@ export const initializeSocket = (httpServer) => {
         maxHttpBufferSize: 1e8, // 100 MB
         cors:{
             origin : allowedOrigins,
-            methods: ["GET", "POST"]
+            methods: ["GET", "POST"],
+            credentials : true
         }
     });
 
     // 🛑 1. Authentication Middleware
     io.use((socket, next) => {
-        const token = socket.handshake.auth.token;
+        // const token = socket.handshake.auth.token;
+        const cokiesString = socket.handshake.headers.cookie || '';
+        if (!cokiesString) {
+            return next(new Error("Authentication error: No cookies provided"));
+        }
+        const cookies = cookie.parse(cokiesString);
+        const token = cookies.jwt_token;
+
         if (!token) {
             return next(new Error("Authentication error: No token provided"));
         }

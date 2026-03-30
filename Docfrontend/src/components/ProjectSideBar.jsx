@@ -69,10 +69,7 @@ export default function ProjectSideBar({
 
     const fetchPendingInvites = async () => {
         try{
-            const token = localStorage.getItem('jwt_token');
-            const response = await api.get(`/projects/${currentProjectId}/invites`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const response = await api.get(`/projects/${currentProjectId}/invites`);
             setPendingSentInvites(response.data?.invitations || []);
         } catch (error) {
             console.error('Error fetching pending invites:', error);
@@ -85,10 +82,8 @@ export default function ProjectSideBar({
         if(!inviteEmail.trim()) return;
         setIsInviting(true);
         try {
-            const token = localStorage.getItem('jwt_token');
             const res = await api.post(`/projects/${currentProjectId}/collaborators`, 
-                { email: inviteEmail },
-                { headers: { Authorization: `Bearer ${token}` } }
+                { email: inviteEmail }
             );
             if(res.data.success) {
                 alert("Invite sent successfully!");
@@ -107,10 +102,7 @@ export default function ProjectSideBar({
 
 const fetchProjects = async () => {
             try {
-                const token = localStorage.getItem('jwt_token');
-                const res = await api.get('/projects', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api.get('/projects');
                 setAllProjects(res.data?.projects || []);
                 const current = res.data?.projects?.find(p => p._id === currentProjectId);
                 if (current) setCurrentProjectDetails(current);
@@ -131,10 +123,7 @@ const fetchProjects = async () => {
 
         const fetchVersions = async () => {
             try {
-                const token = localStorage.getItem('jwt_token');
-                const res = await api.get(`/projects/${currentProjectId}/versions`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api.get(`/projects/${currentProjectId}/versions`);
                 setVersions(res.data?.versions || []);
             } catch (err) {
                 console.error('Error fetching versions:', err);
@@ -149,8 +138,7 @@ const fetchProjects = async () => {
     const handleUpdateProject = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('jwt_token');
-            await api.put(`/projects/${currentProjectId}`, { name: editName, description: editDescription }, { headers: { Authorization: `Bearer ${token}` } });
+            await api.put(`/projects/${currentProjectId}`, { name: editName, description: editDescription });
             setIsEditingProject(false);
             // Socket will trigger re-fetch automatically!
         } catch (error) { alert("Failed to update project details."); }
@@ -160,8 +148,7 @@ const fetchProjects = async () => {
         const confirmDelete = window.confirm("🚨 Are you sure you want to DELETE this project? This will erase all documents, drawings, and versions permanently.");
         if (!confirmDelete) return;
         try {
-            const token = localStorage.getItem('jwt_token');
-            await api.delete(`/projects/${currentProjectId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await api.delete(`/projects/${currentProjectId}`);
             // The backend emits 'kicked-from-project' and forces EVERYONE in the room (including you) to the dashboard safely!
         } catch (error) { alert("Failed to delete project."); }
     };
@@ -170,18 +157,14 @@ const fetchProjects = async () => {
         const confirmRemove = window.confirm("Revoke this user's access?");
         if (!confirmRemove) return;
         try {
-            const token = localStorage.getItem('jwt_token');
-            await api.delete(`/projects/${currentProjectId}/collaborators/${collaboratorId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await api.delete(`/projects/${currentProjectId}/collaborators/${collaboratorId}`);
             // Socket forces the user out and refreshes your list!
         } catch (error) { alert("Failed to remove collaborator."); }
     };
 
     const handleUnsendInvite = async (inviteId) => {
         try{
-            const token = localStorage.getItem('jwt_token');
-            await api.delete(`/invites/${inviteId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.delete(`/invites/${inviteId}`);
             setPendingSentInvites((prev) => prev.filter(invite => invite._id !== inviteId));
         } catch (error) {
             console.error('Error unsending invite:', error);
@@ -192,10 +175,8 @@ const fetchProjects = async () => {
         const confirmLeave = window.confirm("Are you sure you want to leave this project? You will lose access to it.");
         if (!confirmLeave) return;
         try {
-            const token = localStorage.getItem('jwt_token');
-            await api.delete(`/projects/${currentProjectId}/collaborators/me`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            // const token = localStorage.getItem('jwt_token');
+            await api.delete(`/projects/${currentProjectId}/collaborators/me`);
             // 🌟 SOCKET HANDLING: 
             // By redirecting to the dashboard, EditorRoom.jsx unmounts.
             // React automatically fires the useEffect cleanup, triggering socket.emit("leave-document") 

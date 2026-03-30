@@ -10,7 +10,7 @@ export default function AxiosInterceptor({ children }) {
             (error) => {
                 if (error.response && error.response.status === 401) {
                     console.warn("Unauthorized access detected. Redirecting to login page.");
-                    localStorage.removeItem("jwt_token");
+                    // localStorage.removeItem("jwt_token");
                     navigate("/login");
                 }
                 return Promise.reject(error);

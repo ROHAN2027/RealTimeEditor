@@ -25,10 +25,7 @@ export default function Dashboard() {
 // 🌟 FIX: Moved the function outside so the whole component can use it!
   const fetchProjects = async () => {
     try {
-      const token = localStorage.getItem('jwt_token');
-      const response = await api.get('/projects', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/projects');
       setProjects(response.data?.projects || []);
     } catch (error) {
       console.error("Failed to fetch projects", error);
@@ -78,7 +75,6 @@ export default function Dashboard() {
 
     setIsCreating(true);
     try {
-      const token = localStorage.getItem('jwt_token');
       const payload = {
         title: newProjectName,
         type: newProjectType
@@ -89,8 +85,7 @@ export default function Dashboard() {
       }
 
       const response = await api.post('/projects', 
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
+        payload
       );
       
       // Add the new project to our list instantly

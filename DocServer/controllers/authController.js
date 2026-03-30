@@ -44,6 +44,16 @@ export const login = async (req, res) => {
             return res.status(400).json({message: "Invalid password"});
         }
         const token = generateToken({ userId: user._id });
+
+        res.cookie(
+            'jwt_token',token,
+            {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                sameSite: 'lax', // Adjust as needed (e.g., 'lax' or 'none' if you have cross-origin requests)
+                maxAge: 7 * 24 * 60 * 60 * 1000 // Cookie expires in 7 days
+            }
+        )
         
         // Return user data without password
         const userResponse = {
@@ -52,11 +62,20 @@ export const login = async (req, res) => {
             email: user.email
         };
         
-        res.status(200).json({message: "Login successful", token: token, user: userResponse});
+        res.status(200).json({message: "Login successful", user: userResponse});
     } catch (error) {
         console.error("Error in login controller:", error);
         res.status(500).json({message: "Error logging in"});
     }
+}
+
+export const logout = (req, res) => {
+    res.clearCookie('jwt_token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    });
+    res.status(200).json({message: "Logout successful"});
 }
 
 export const getProfile = async (req, res) => {

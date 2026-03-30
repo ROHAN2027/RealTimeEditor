@@ -99,8 +99,7 @@ const EditorRoom = () => {
         if(shapeIds.length === 0) { alert("No shapes to save!"); return; }
         
         try {
-            const token = localStorage.getItem('jwt_token');
-            const authHeaders = { 'Authorization': `Bearer ${token}` };
+            
             const { blob } = await tldrawEditor.toImage(shapeIds, { format: 'png', background: true, padding: 20 });
 
             const fileHash = await calculateFileHash(blob);
@@ -110,7 +109,6 @@ const EditorRoom = () => {
             
             const imgResponse = await api.post(`${projectId}/iupload`, imageFormData, {
                 params: { hash: fileHash, drawingId: activeDrawingId },
-                headers: authHeaders
             });
             if (!imgResponse.data.success) throw new Error("Failed to upload image to Cloudinary");
 
@@ -124,7 +122,7 @@ const EditorRoom = () => {
             mathFormData.append('projectId', projectId);
             mathFormData.append('thumbnailUrl', finalImageUrl);
 
-            const dbResponse = await api.post(`/drawings/${projectId}/save`, mathFormData, { headers: authHeaders });
+            const dbResponse = await api.post(`/drawings/${projectId}/save`, mathFormData);
 
             if (dbResponse.data.success) {
                 alert("Drawing saved successfully!");
@@ -172,10 +170,8 @@ const EditorRoom = () => {
             const fileHash = await calculateFileHash(file); 
             formData.append('image', file);
             
-            const token = localStorage.getItem('jwt_token');
             const response = await api.post(`${projectId}/iupload`, formData, {
                 params: { hash: fileHash },
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = response.data; 
 
@@ -198,12 +194,11 @@ const EditorRoom = () => {
         setIsSaving(true);
         try{
             const currentBlob = Y.encodeStateAsUpdate(ydocRef.current);
-            const token = localStorage.getItem('jwt_token');
             await api.post(`/projects/${projectId}/versions`, {
                 versionName: customName,
                 binaryData: Array.from(currentBlob),
                 saveType: 'manual'
-            }, { headers: { Authorization: `Bearer ${token}` }});
+            });
             
             setVersionRefreshTrigger(prev => prev + 1);
             alert("Project saved successfully!");
@@ -224,14 +219,13 @@ const EditorRoom = () => {
 
         try {
             const currentBlob = Y.encodeStateAsUpdate(ydocRef.current);
-            const token = localStorage.getItem('jwt_token');
             
             // Backup current state
             await api.post(`/projects/${projectId}/versions`, {
                 versionName: `Pre-Revert Auto-Backup`,
                 binaryData: Array.from(currentBlob),
                 saveType: 'auto' 
-            }, { headers: { Authorization: `Bearer ${token}` }});
+            });
             
             setVersionRefreshTrigger(prev => prev + 1);
 
@@ -256,8 +250,8 @@ const EditorRoom = () => {
                         versionName: `Restored Configuration`,
                         binaryData: Array.from(restoredBlob),
                         saveType: 'manual' 
-                    }, { headers: { Authorization: `Bearer ${token}` }});
-                    
+                    });
+
                     setVersionRefreshTrigger(prev => prev + 1);
                     setPreviewVersionId(null);
                     setIsSaving(false);
@@ -563,7 +557,7 @@ const EditorRoom = () => {
                     versionName: `Auto-save at ${new Date().toLocaleTimeString()}`,
                     binaryData: Array.from(currentBlob), 
                     saveType: 'auto' 
-                }, { headers: { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` }});
+                });
                 
                 setVersionRefreshTrigger(prev => prev + 1);
             } catch (error) { console.error("Auto-save failed:", error); }

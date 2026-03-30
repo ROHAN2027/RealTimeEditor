@@ -1,5 +1,6 @@
 import { createContext , useState , useEffect , useContext }   from "react";
 import api from "../api/axiosSetup";
+import { logoutUser } from "../api/auth";
 
 const AuthContext = createContext();
 
@@ -9,31 +10,30 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const restoreSession = async () => {
-            const token = localStorage.getItem("jwt_token");
-            if (token) {
                 try {
-                    const response = await api.get("/auth/profile", {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
+                    const response = await api.get("/auth/profile");
                     setUser(response.data.user);
                 } catch (error) {
                     console.error("Failed to restore session:", error);
-                    localStorage.removeItem("jwt_token");
                     setUser(null);
                 }
-            }
             setLoading(false);
         };
         restoreSession();
     }, []);
 
-    const login = async (token , userdata ) => {
-        localStorage.setItem("jwt_token", token);
+    const login = async ( userdata ) => {
         setUser(userdata);
     }
 
-    const logout = () => {
-        localStorage.removeItem("jwt_token");
+    const logout = async() => {
+        try {
+            await logoutUser(); // Tell the backend to clear the cookie vault
+        } catch (error) {
+            console.error("Error logging out from server", error);
+        } finally {
+            setUser(null);
+        }
         setUser(null);
     }
 

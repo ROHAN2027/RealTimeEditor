@@ -29,12 +29,8 @@ const IsolatedMultiplayerTldraw = ({ drawingId ,projectId , onMount , isolatedYd
 
         const loadExistingDrawing = async()=>{
             try{
-                const token = localStorage.getItem('jwt_token');
                 const response = await api.get(`/drawings/${projectId}/${drawingId}`, {
                     responseType: 'arraybuffer', // Expect binary data (Yjs updates) from the server
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
                 });
 
                 if(response.data && response.data.byteLength > 0){
