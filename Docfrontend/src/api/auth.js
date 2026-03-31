@@ -32,6 +32,24 @@ export const loginUser = async (credentials) => {
 };
 
 /**
+ * 🌟 5. NEW: Google Login
+ * @param {String} credential - The giant token string Google gives us
+ */
+
+export const googleLoginUser = async (credential) => {
+    try {
+        // 🌟 FIX 1: Change .get to .post
+        // 🌟 FIX 2: Wrap credential in curly braces so it sends as JSON: { credential: "..." }
+        const response = await api.post('/auth/google/login', { credential });
+        return response.data;
+    }
+    catch (error) {
+        console.error('Error logging in with Google:', error);
+        throw error;
+    }
+};
+
+/**
  * 3. Fetch the logged-in user's profile
  * Used by the AuthContext when the app first loads to restore the session.
  */
@@ -60,3 +78,6 @@ export const logoutUser = async () => {
         throw error;
     }
 };
+
+
+

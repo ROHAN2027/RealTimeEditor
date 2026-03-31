@@ -12,8 +12,11 @@ const userSchema = new mongoose.Schema({
     },
     passwordHash: {
         type: String,
-        required: true,
     },
+    authProvider: { 
+        type: String, 
+        default: 'local' 
+    } // 🌟 Track how they signed up
 },{
     timestamps: true,
 });

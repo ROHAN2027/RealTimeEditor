@@ -1,6 +1,59 @@
 import {hashPassword, verifyPassword} from '../services/hash.js';
+import { OAuth2Client } from 'google-auth-library';
 import {generateToken} from '../services/jwt.js';
 import User from '../models/User.js';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleLogin = async (req, res) => {
+    try{
+        const { credential } = req.body;
+        // console.log("Received Google credential:", credential);
+
+        const ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const { name, email } = ticket.getPayload();
+
+        // 🌟 FIX 2 & 3: Use 'let user' and fix the Mongoose creation logic
+        let user = await User.findOne({ email: email });
+        if(!user) {
+            user = new User({
+                name: name,
+                email: email,
+                authProvider: 'google'
+            });
+            await user.save();
+        }
+
+        const token = generateToken({ userId: user._id });
+
+        res.cookie(
+            'jwt_token',token,
+            {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                sameSite: 'lax', // Adjust as needed (e.g., 'lax' or 'none' if you have cross-origin requests)
+                maxAge: 7 * 24 * 60 * 60 * 1000 // Cookie expires in 7 days
+            }
+        )
+
+        const userResponse = {
+            _id: user._id,
+            name: user.name,
+            email: user.email
+        };
+        
+        res.status(200).json({message: "Login successful", user: userResponse});
+
+    }
+    catch (error) {
+        console.error("Google Auth Error:", error);
+        res.status(401).json({ message: "Invalid Google Token" });
+    }
+}
 
 export const register = async (req, res) => {
     const {name, email, password} = req.body;

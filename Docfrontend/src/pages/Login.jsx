@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { loginUser, registerUser } from '../api/auth';
+import { loginUser, registerUser , googleLoginUser } from '../api/auth';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function Login() {
   // 1. Component State
@@ -50,6 +51,22 @@ export default function Login() {
       // If the backend sends an error (e.g., "Invalid password", "Email taken"), display it
       setError(
         err.response?.data?.message || 'Something went wrong. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const data = await googleLoginUser(credentialResponse.credential);
+      login(data.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(
+        err.response?.data?.message || 'Google login failed. Please try again.'
       );
     } finally {
       setIsLoading(false);
@@ -139,6 +156,30 @@ export default function Login() {
               : (isLoginView ? 'Log In' : 'Sign Up')}
           </button>
         </form>
+
+        {/* 🌟 COPY AND PASTE THIS NEW BLOCK HERE 🌟 */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-slate-500">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google Popup closed or failed to load.')}
+              theme="outline"
+              size="large"
+              text="continue_with"
+              width="100%"
+            />
+          </div>
+        </div>
+        {/* 🌟 END OF NEW BLOCK 🌟 */}
 
         {/* Toggle between Login and Register */}
         <div className="mt-6 text-center text-sm text-slate-600">
