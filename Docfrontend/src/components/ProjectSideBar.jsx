@@ -31,8 +31,9 @@ export default function ProjectSideBar({
     const [editName, setEditName] = useState('');
     const [editDescription, setEditDescription] = useState('');
 
-    // 🌟 Check if current user is the owner (this now works safely!)
-    const isOwner = currentProjectDetails?.ownerId?._id === user?._id || currentProjectDetails?.ownerId === user?._id;
+    // 🌟 BULLETPROOF OWNER CHECK: Forces string conversion to prevent MongoDB ObjectID mismatches
+    const safeOwnerId = currentProjectDetails?.ownerId?._id || currentProjectDetails?.ownerId;
+    const isOwner = Boolean(safeOwnerId && user?._id && String(safeOwnerId) === String(user._id));
 
     // 🌟 NEW: Listen for the receiver accepting/rejecting the invite
     useEffect(() => {
