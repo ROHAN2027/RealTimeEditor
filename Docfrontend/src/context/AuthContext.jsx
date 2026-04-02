@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
         restoreSession();
     }, []);
 
-    const login = async ( userdata ) => {
+    const login = ( userdata ) => {
         setUser(userdata);
     }
 
@@ -34,7 +34,6 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setUser(null);
         }
-        setUser(null);
     }
 
     return (

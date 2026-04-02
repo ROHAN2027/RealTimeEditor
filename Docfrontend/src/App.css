@@ -1,0 +1,49 @@
+/* Apply the global theme */
+body {
+    background: var(--theme-bg);
+    color: var(--theme-text);
+    min-height: 100vh;
+    transition: background 0.5s ease, color 0.5s ease;
+}
+
+/* Make buttons/links use the accent color */
+.theme-accent-bg { background-color: var(--theme-accent); }
+.theme-accent-text { color: var(--theme-accent); }
+
+/* The Editor Area */
+.ql-editor {
+    background: var(--theme-editor-bg);
+    color: var(--theme-text);
+    border-radius: 8px;
+    min-height: 60vh;
+}
+
+/* 🌟 THE PDF EXPORT / PRINT FIX 🌟 */
+
+/* 1. When the user clicks the Export PDF button */
+.pdf-exporting {
+    background: #ffffff !important;
+    color: #000000 !important;
+}
+
+.pdf-exporting .ql-editor {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 2. When the user physically presses Ctrl+P to print */
+@media print {
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
+    
+    .ql-editor {
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
