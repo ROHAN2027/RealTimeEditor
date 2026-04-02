@@ -3,18 +3,24 @@ import api from '../api/axiosSetup';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
+// 🌟 PREMIUM REUSABLE COMPONENTS
+import Button from '../components/comman/Buttons';
+import Input from '../components/comman/Input';
+import Avatar from '../components/comman/Avatar';
+import Badge from '../components/comman/Badge';
+
 export default function ProjectSideBar({
     isOpen,
     currentProjectId,
     onlineUsers = [], 
     onClose,
-    onPreviewClick,         // 🌟 FIX 1: Added missing prop
-    versionRefreshTrigger   // 🌟 FIX 2: Added missing trigger prop
+    onPreviewClick,
+    versionRefreshTrigger
 }) {
     const [activeTab, setActiveTab] = useState('projects'); 
-    // 🌟 FIX 1: Extract 'user' from the Auth Context!
     const { user } = useAuth();
     const socket = useSocket();
+    
     // Data States
     const [allProjects, setAllProjects] = useState([]);
     const [currentProjectDetails, setCurrentProjectDetails] = useState(null);
@@ -24,41 +30,30 @@ export default function ProjectSideBar({
     const [inviteEmail, setInviteEmail] = useState('');
     const [isInviting, setIsInviting] = useState(false);
     const [pendingSentInvites, setPendingSentInvites] = useState([]);
-    const [refreshTrigger, setRefreshTrigger] = useState(0); // 🌟 NEW: Forces project data reload
+    const [refreshTrigger, setRefreshTrigger] = useState(0); 
 
-    // 🌟 EDITING STATE
+    // EDITING STATE
     const [isEditingProject, setIsEditingProject] = useState(false);
     const [editName, setEditName] = useState('');
     const [editDescription, setEditDescription] = useState('');
 
-    // 🌟 BULLETPROOF OWNER CHECK: Forces string conversion to prevent MongoDB ObjectID mismatches
+    // 🌟 BULLETPROOF OWNER CHECK
     const safeOwnerId = currentProjectDetails?.ownerId?._id || currentProjectDetails?.ownerId;
     const isOwner = Boolean(safeOwnerId && user?._id && String(safeOwnerId) === String(user._id));
 
-    // 🌟 NEW: Listen for the receiver accepting/rejecting the invite
     useEffect(() => {
         if (!socket) return;
 
         const handleInviteResponded = ({ inviteId, response }) => {
-            // Instantly remove it from the pending list
             setPendingSentInvites((prev) => prev.filter(inv => inv._id !== inviteId));
-            
-            // If they accepted, tell the sidebar to fetch the new collaborators list!
-            if (response === 'accepted') {
-                setRefreshTrigger(prev => prev + 1); 
-            }
+            if (response === 'accepted') setRefreshTrigger(prev => prev + 1); 
         };
 
-        const handleProjectUpdated = () => {
-            setRefreshTrigger(prev => prev + 1);
-        };
-
-        const handleMyProjectsUpdated = () => {
-            setRefreshTrigger(prev => prev + 1); // Forces the sidebar to re-fetch!
-        };
+        const handleProjectUpdated = () => setRefreshTrigger(prev => prev + 1);
+        const handleMyProjectsUpdated = () => setRefreshTrigger(prev => prev + 1);
+        
         socket.on('user-projects-updated', handleMyProjectsUpdated);
         socket.on('project-updated', handleProjectUpdated);
-
         socket.on('invite-responded', handleInviteResponded);
 
         return () => {
@@ -69,13 +64,10 @@ export default function ProjectSideBar({
     }, [socket]);
 
     const fetchPendingInvites = async () => {
-        try{
+        try {
             const response = await api.get(`/projects/${currentProjectId}/invites`);
             setPendingSentInvites(response.data?.invitations || []);
-        } catch (error) {
-            console.error('Error fetching pending invites:', error);
-
-        }
+        } catch (error) { console.error('Error fetching pending invites:', error); }
     }
 
     const handleInviteCollaborator = async (e) => {
@@ -83,115 +75,82 @@ export default function ProjectSideBar({
         if(!inviteEmail.trim()) return;
         setIsInviting(true);
         try {
-            const res = await api.post(`/projects/${currentProjectId}/collaborators`, 
-                { email: inviteEmail }
-            );
+            const res = await api.post(`/projects/${currentProjectId}/collaborators`, { email: inviteEmail });
             if(res.data.success) {
-                alert("Invite sent successfully!");
                 setInviteEmail('');
-                fetchPendingInvites(); // Refresh the pending invites list
+                fetchPendingInvites();
             }
-        } catch (error) {
-            alert(error.response?.data?.message || "Failed to send invite");
-        } finally {
-            setIsInviting(false);
-        }
+        } catch (error) { alert(error.response?.data?.message || "Failed to send invite"); } 
+        finally { setIsInviting(false); }
     };
 
     useEffect(() => {
         if (!isOpen) return;
-
-const fetchProjects = async () => {
+        const fetchProjects = async () => {
             try {
                 const res = await api.get('/projects');
                 setAllProjects(res.data?.projects || []);
                 const current = res.data?.projects?.find(p => p._id === currentProjectId);
                 if (current) setCurrentProjectDetails(current);
-            } catch (err) {
-                console.error('Error fetching projects:', err);
-            }
+            } catch (err) { console.error('Error fetching projects:', err); }
         };
-
         fetchProjects();
         if(isOwner) fetchPendingInvites();
-    }, [isOpen, currentProjectId, refreshTrigger , isOwner ]); // 🌟 Added refreshTrigger to dependencies so it refetches when an invite is accepted/rejected
+    }, [isOpen, currentProjectId, refreshTrigger, isOwner]); 
 
-
-    // 🌟 FETCH 2: Fetches versions when Tab opens OR when a save happens!
     useEffect(() => {
-        // Only fetch if the sidebar is open and we are looking at the versions tab
         if (!isOpen || activeTab !== 'versions') return;
-
         const fetchVersions = async () => {
             try {
                 const res = await api.get(`/projects/${currentProjectId}/versions`);
                 setVersions(res.data?.versions || []);
-            } catch (err) {
-                console.error('Error fetching versions:', err);
-            }
+            } catch (err) { console.error('Error fetching versions:', err); }
         };
-
         fetchVersions();
-    // 👇 The magic is here: It listens to versionRefreshTrigger!
     }, [isOpen, activeTab, currentProjectId, versionRefreshTrigger]);
 
-    // 🌟 OWNER API CALLS
     const handleUpdateProject = async (e) => {
         e.preventDefault();
         try {
             await api.put(`/projects/${currentProjectId}`, { name: editName, description: editDescription });
             setIsEditingProject(false);
-            // Socket will trigger re-fetch automatically!
         } catch (error) { alert("Failed to update project details."); }
     };
 
     const handleDeleteProject = async () => {
-        const confirmDelete = window.confirm("🚨 Are you sure you want to DELETE this project? This will erase all documents, drawings, and versions permanently.");
+        const confirmDelete = window.confirm("🚨 Are you sure you want to DELETE this project?");
         if (!confirmDelete) return;
-        try {
-            await api.delete(`/projects/${currentProjectId}`);
-            // The backend emits 'kicked-from-project' and forces EVERYONE in the room (including you) to the dashboard safely!
-        } catch (error) { alert("Failed to delete project."); }
+        try { await api.delete(`/projects/${currentProjectId}`); } 
+        catch (error) { alert("Failed to delete project."); }
     };
 
     const handleRemoveCollaborator = async (collaboratorId) => {
         const confirmRemove = window.confirm("Revoke this user's access?");
         if (!confirmRemove) return;
-        try {
-            await api.delete(`/projects/${currentProjectId}/collaborators/${collaboratorId}`);
-            // Socket forces the user out and refreshes your list!
-        } catch (error) { alert("Failed to remove collaborator."); }
+        try { await api.delete(`/projects/${currentProjectId}/collaborators/${collaboratorId}`); } 
+        catch (error) { alert("Failed to remove collaborator."); }
     };
 
     const handleUnsendInvite = async (inviteId) => {
-        try{
+        try {
             await api.delete(`/invites/${inviteId}`);
             setPendingSentInvites((prev) => prev.filter(invite => invite._id !== inviteId));
-        } catch (error) {
-            console.error('Error unsending invite:', error);
-        }
+        } catch (error) { console.error('Error unsending invite:', error); }
     }
 
     const handleLeaveProject = async () => {
-        const confirmLeave = window.confirm("Are you sure you want to leave this project? You will lose access to it.");
+        const confirmLeave = window.confirm("Are you sure you want to leave this project?");
         if (!confirmLeave) return;
         try {
-            // const token = localStorage.getItem('jwt_token');
             await api.delete(`/projects/${currentProjectId}/collaborators/me`);
-            // 🌟 SOCKET HANDLING: 
-            // By redirecting to the dashboard, EditorRoom.jsx unmounts.
-            // React automatically fires the useEffect cleanup, triggering socket.emit("leave-document") 
-            // and destroying the Yjs doc, instantly cleanly disconnecting them!
             window.location.href = '/dashboard';
-        } catch (error) {
-            console.error('Error leaving project:', error);
-            alert(error.response?.data?.message || "Failed to leave project");
-        }
+        } catch (error) { alert(error.response?.data?.message || "Failed to leave project"); }
     }
 
     // --- RENDER PREP ---
     const filteredProjects = allProjects.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
     const allCollaborators = [...(currentProjectDetails?.collaborators || [])];
+    
     if (currentProjectDetails?.ownerId) {
         const hasOwner = allCollaborators.some(c => (c._id || c) === (currentProjectDetails.ownerId._id || currentProjectDetails.ownerId));
         if (!hasOwner) allCollaborators.push(currentProjectDetails.ownerId);
@@ -199,145 +158,235 @@ const fetchProjects = async () => {
 
     const onlineUserIds = onlineUsers.map(u => u.id);
     const offlineUsers = allCollaborators.filter(c => !onlineUserIds.includes(c._id || c));
-    // 🌟 ADD THIS MISSING LINE HERE:
-    // 🌟 FIX: Wrap it in String() to guarantee perfect matching
     const ownerIdStr = String(currentProjectDetails?.ownerId?._id || currentProjectDetails?.ownerId);
 
+    const textAreaClass = "w-full px-4 py-3 bg-[var(--theme-bg,#ffffff)]/80 backdrop-blur-sm border border-[var(--theme-text,#cbd5e1)]/40 rounded-xl text-[var(--theme-text,#0f172a)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-accent,#3b82f6)]/50 transition-all resize-none shadow-inner";
 
     return (
-        <div style={{ width: isOpen ? '280px' : '0px', minWidth: isOpen ? '280px' : '0px', flexShrink: 0, backgroundColor: '#ffffff', borderRight: isOpen ? '1px solid #e2e8f0' : 'none', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', whiteSpace: 'nowrap', color: '#1e293b', zIndex: 50 }}>
-            
-            {/* 🌟 PROJECT HEADER (View & Edit Mode) */}
-            {isEditingProject ? (
-                <form onSubmit={handleUpdateProject} style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Project Name" style={{ padding: '8px', fontSize: '14px', border: '1px solid #cbd5e1', borderRadius: '4px', fontWeight: 'bold' }} required />
-                    <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Project Description (Optional)" style={{ padding: '8px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', resize: 'none' }} rows={2} />
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button type="submit" style={{ flex: 1, padding: '6px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Save</button>
-                        <button type="button" onClick={() => setIsEditingProject(false)} style={{ flex: 1, padding: '6px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Cancel</button>
-                    </div>
-                </form>
-            ) : (
-                <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal', wordBreak: 'break-word', paddingRight: '10px' }}>
-                            {currentProjectDetails?.name || 'Workspace'}
-                        </h3>
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                            {isOwner && (
-                                <>
-                                    <button onClick={() => { setEditName(currentProjectDetails?.name || ''); setEditDescription(currentProjectDetails?.description || ''); setIsEditingProject(true); }} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', padding: 0 }}>Edit</button>
-                                    <button onClick={handleDeleteProject} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', padding: 0 }}>Delete</button>
-                                </>
-                            )}
-                            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '22px', lineHeight: '1', padding: 0 }}>&times;</button>
-                        </div>
-                    </div>
-                    {/* 🌟 SHOW DESCRIPTION */}
-                    {currentProjectDetails?.description && (
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.4' }}>
-                            {currentProjectDetails.description}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* OWNER ONLY: INVITE SECTION */}
-            {isOwner && (
-                <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#ffffff' }}>
-                    <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px', fontWeight: 'bold' }}>Invite Collaborator</div>
-                    <form onSubmit={handleInviteCollaborator} style={{ display: 'flex', gap: '8px' }}>
-                        <input type="email" placeholder="User's email..." value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
-                        <button type="submit" disabled={isInviting} style={{ padding: '8px 12px', fontSize: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: isInviting ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>{isInviting ? '...' : 'Send'}</button>
-                    </form>
-                    {pendingSentInvites.length > 0 && (
-                        <div style={{ marginTop: '12px' }}>
-                            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '6px' }}>Pending Invites</div>
-                            {pendingSentInvites.map(inv => (
-                                <div key={inv._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: '6px 8px', borderRadius: '4px', marginBottom: '4px', border: '1px solid #e2e8f0' }}>
-                                    <span style={{ fontSize: '11px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inv.receiverId?.email}</span>
-                                    <button onClick={() => handleUnsendInvite(inv._id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>Revoke</button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* COLLABORATOR ONLY: LEAVE PROJECT */}
-            {!isOwner && (
-                <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#fef2f2' }}>
-                    <button onClick={handleLeaveProject} style={{ width: '100%', padding: '8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Leave Project</button>
-                </div>
-            )}
-
-            {/* Online/Offline Status Panel */}
-            <div style={{ padding: '15px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px', fontWeight: 'bold' }}>Currently In File</div>
+        /* 🌟 THE SLIDING CLIPPER BOX: This outer div animates width to hide the inner content cleanly without squishing! */
+        <div className={`transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0 overflow-hidden z-50 h-full ${isOpen ? 'w-[340px] shadow-[10px_0_30px_rgba(0,0,0,0.1)] border-r border-[var(--theme-text)]/10' : 'w-0 border-none shadow-none'}`}>
+          
+            <div className="w-[340px] flex flex-col h-full bg-[var(--theme-bg)]/95 backdrop-blur-3xl relative">
                 
-                {onlineUsers.map((u, i) => (
-                    <div key={`online-${i}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', marginRight: '8px', flexShrink: 0 }}></span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name} {u.isMe && '(You)'}</span>
-                        {/* 🌟 KICK BUTTON (ONLINE) */}
-                        {isOwner && !u.isMe && String(u.id) !== ownerIdStr && (
-                            <button onClick={() => handleRemoveCollaborator(u.id)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Kick</button>
-                        )}
-                    </div>
-                ))}
+                {/* Ambient Sidebar Glow */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--theme-accent)]/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-                {offlineUsers.length > 0 && (
-                    <div style={{ marginTop: '10px' }}>
-                        <div style={{ fontSize: '12px', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px', fontWeight: 'bold' }}>Offline</div>
-                        {offlineUsers.map((u, i) => (
-                            <div key={`offline-${i}`} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', fontSize: '14px', color: '#94a3b8' }}>
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', border: '1px solid #94a3b8', marginRight: '8px', flexShrink: 0 }}></span>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name || 'Collaborator'}</span>
-                                {/* 🌟 KICK BUTTON (OFFLINE) */}
-                                {isOwner && String(u._id || u) !== ownerIdStr && (
-                                    <button onClick={() => handleRemoveCollaborator(u._id || u)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Remove</button>
+                {/* --- 1. FIXED HEADER (Never Scrolls) --- */}
+                <div className="p-6 border-b border-[var(--theme-text)]/10 shrink-0 relative z-20 bg-[var(--theme-bg)]/80 backdrop-blur-md">
+                    {isEditingProject ? (
+                        <form onSubmit={handleUpdateProject} className="flex flex-col gap-3">
+                            <span className="text-xs font-black uppercase tracking-widest text-[var(--theme-accent)] mb-1">Edit Workspace</span>
+                            <Input name="editName" value={editName} onChange={e => setEditName(e.target.value)} required placeholder="Project Name" />
+                            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Description (Optional)" className={textAreaClass} rows={2} />
+                            <div className="flex gap-2 pt-2">
+                                <Button type="button" variant="ghost" onClick={() => setIsEditingProject(false)} className="flex-1">Cancel</Button>
+                                <Button type="submit" variant="primary" className="flex-1">Save</Button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="relative group">
+                            <div className="flex justify-between items-start gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-2xl font-extrabold text-[var(--theme-text)] truncate mb-1 tracking-tight">
+                                        {currentProjectDetails?.name || 'Workspace'}
+                                    </h3>
+                                    {currentProjectDetails?.description && (
+                                        <p className="text-xs text-[var(--theme-text)]/50 font-medium line-clamp-2 leading-relaxed">
+                                            {currentProjectDetails.description}
+                                        </p>
+                                    )}
+                                </div>
+                                <button onClick={onClose} className="shrink-0 text-[var(--theme-text)]/40 hover:text-[var(--theme-text)] hover:bg-[var(--theme-text)]/10 p-1.5 rounded-lg transition-colors">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                            
+                            <div className="flex gap-2 mt-5">
+                                {isOwner ? (
+                                    <>
+                                        <Button size="sm" variant="secondary" className="flex-1 text-[11px]" onClick={() => { setEditName(currentProjectDetails?.name || ''); setEditDescription(currentProjectDetails?.description || ''); setIsEditingProject(true); }}>
+                                            Edit Details
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="flex-1 text-[11px] !text-red-500 hover:!bg-red-500/10" onClick={handleDeleteProject}>
+                                            Delete
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button size="sm" variant="danger" className="w-full text-[11px] shadow-lg shadow-red-500/20" onClick={handleLeaveProject}>
+                                        Leave Project
+                                    </Button>
                                 )}
                             </div>
-                        ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* --- 2. SCROLLABLE CONTENT AREA --- */}
+                <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col relative z-10">
+                    
+                    {/* STICKY TABS */}
+                    <div className="sticky top-0 z-30 bg-[var(--theme-bg)]/90 backdrop-blur-xl border-b border-[var(--theme-text)]/10 p-3 pt-4">
+                        <div className="flex p-1 bg-[var(--theme-text)]/5 rounded-xl border border-[var(--theme-text)]/5 shadow-inner">
+                            <button 
+                                onClick={() => setActiveTab('projects')} 
+                                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'projects' ? 'bg-[var(--theme-accent)] text-white shadow-[0_4px_15px_-3px_var(--theme-accent)]' : 'text-[var(--theme-text)]/50 hover:text-[var(--theme-text)] hover:bg-[var(--theme-text)]/5'}`}
+                            >
+                                Projects
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('versions')} 
+                                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'versions' ? 'bg-[var(--theme-accent)] text-white shadow-[0_4px_15px_-3px_var(--theme-accent)]' : 'text-[var(--theme-text)]/50 hover:text-[var(--theme-text)] hover:bg-[var(--theme-text)]/5'}`}
+                            >
+                                Versions
+                            </button>
+                        </div>
                     </div>
-                )}
-            </div>
 
-            {/* Tabs & Content */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                <button onClick={() => setActiveTab('projects')} style={{ flex: 1, padding: '12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'projects' ? '2px solid #3b82f6' : '2px solid transparent', color: activeTab === 'projects' ? '#3b82f6' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>Projects</button>
-                <button onClick={() => setActiveTab('versions')} style={{ flex: 1, padding: '12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'versions' ? '2px solid #10b981' : '2px solid transparent', color: activeTab === 'versions' ? '#10b981' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>Versions</button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
-                {activeTab === 'projects' ? (
-                    <>
-                        <input type="text" placeholder="🔍 Search projects..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '8px 12px', marginBottom: '15px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#1e293b', boxSizing: 'border-box' }} />
-                        {filteredProjects.map(p => (
-                            <div key={p._id} onClick={() => window.open(`/project/${p._id}`, '_blank')} style={{ padding: '10px', marginBottom: '8px', borderRadius: '6px', backgroundColor: p._id === currentProjectId ? '#f1f5f9' : 'transparent', cursor: 'pointer', border: '1px solid', borderColor: p._id === currentProjectId ? '#cbd5e1' : 'transparent' }}>
-                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: p._id === currentProjectId ? '#3b82f6' : '#1e293b' }}>{p.name}</div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{p.type.toUpperCase()}</div>
-                            </div>
-                        ))}
-                    </>
-                ) : (
-                    <>
-                        {versions.length === 0 ? (
-                            <div style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', marginTop: '20px' }}>No versions saved yet.</div>
-                        ) : (
-                            versions.map(v => (
-                                <div key={v._id} style={{ padding: '10px', marginBottom: '8px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: v.saveType === 'auto' ? '3px solid #94a3b8' : '3px solid #10b981' }}>
-                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{v.versionName}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span>{new Date(v.createdAt).toLocaleDateString()}</span>
-                                        <span style={{ textTransform: 'capitalize' }}>{v.saveType}</span>
+                    {/* TAB CONTENT */}
+                    <div className="flex-1 p-4 pb-10">
+                        {activeTab === 'projects' ? (
+                            <div className="space-y-6">
+                                {/* SEARCH BAR */}
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none opacity-50 group-focus-within:opacity-100 group-focus-within:text-[var(--theme-accent)] transition-colors">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     </div>
-                                    <button onClick={() => onPreviewClick(v._id)} style={{ marginTop: '8px', padding: '4px 8px', fontSize: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '100%' }}>Preview & Restore</button>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search projects..." 
+                                        value={searchQuery} 
+                                        onChange={(e) => setSearchQuery(e.target.value)} 
+                                        className="w-full pl-10 pr-4 py-2.5 bg-[var(--theme-text)]/5 hover:bg-[var(--theme-text)]/10 focus:bg-[var(--theme-bg)] border border-[var(--theme-text)]/10 focus:border-[var(--theme-accent)] rounded-xl text-sm font-bold text-[var(--theme-text)] focus:outline-none focus:ring-4 focus:ring-[var(--theme-accent)]/20 transition-all placeholder:font-medium placeholder-[var(--theme-text)]/30"
+                                    />
                                 </div>
-                            ))
+
+                                {/* PROJECT LIST (With Glow Hover) */}
+                                <div className="space-y-3">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40 ml-1">Your Workspaces</h4>
+                                    {filteredProjects.map(p => (
+                                        <div 
+                                            key={p._id} 
+                                            onClick={() => window.open(`/project/${p._id}`, '_blank')} 
+                                            className={`group relative p-4 rounded-xl cursor-pointer transition-all duration-300 overflow-hidden border ${p._id === currentProjectId ? 'bg-[var(--theme-accent)]/10 border-[var(--theme-accent)]/40 shadow-sm' : 'bg-[var(--theme-text)]/[0.02] border-[var(--theme-text)]/10 hover:border-[var(--theme-accent)]/50 hover:shadow-[0_10px_30px_-10px_var(--theme-accent)] hover:-translate-y-0.5'}`}
+                                        >
+                                            {/* Glow Behind Item */}
+                                            <div className="absolute inset-0 bg-gradient-to-r from-[var(--theme-accent)]/0 via-[var(--theme-accent)]/5 to-[var(--theme-accent)]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                                            
+                                            <div className="relative z-10 flex justify-between items-start">
+                                                <div className={`text-sm font-extrabold truncate pr-2 transition-colors ${p._id === currentProjectId ? 'text-[var(--theme-accent)]' : 'text-[var(--theme-text)] group-hover:text-[var(--theme-accent)]'}`}>
+                                                    {p.name}
+                                                </div>
+                                                <Badge variant={p.type === 'group' ? 'purple' : 'emerald'} className="shrink-0">{p.type}</Badge>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {versions.length === 0 ? (
+                                    <div className="text-center py-16 opacity-50">
+                                        <div className="text-4xl mb-3 grayscale opacity-70">🕰️</div>
+                                        <h4 className="text-sm font-bold text-[var(--theme-text)]">No History</h4>
+                                        <p className="text-xs font-medium mt-1">Saved versions will appear here.</p>
+                                    </div>
+                                ) : (
+                                    versions.map(v => (
+                                        <div key={v._id} className="p-4 rounded-xl bg-[var(--theme-bg)] border border-[var(--theme-text)]/10 shadow-sm hover:shadow-md hover:border-[var(--theme-accent)]/30 hover:-translate-y-0.5 transition-all relative overflow-hidden group">
+                                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${v.saveType === 'auto' ? 'bg-[var(--theme-text)]/20' : 'bg-emerald-500'}`}></div>
+                                            <div className="pl-3">
+                                                <div className="text-sm font-bold text-[var(--theme-text)] group-hover:text-[var(--theme-accent)] transition-colors truncate mb-1.5">{v.versionName}</div>
+                                                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text)]/40 mb-4">
+                                                    <span>{new Date(v.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <span className={v.saveType === 'auto' ? '' : 'text-emerald-500'}>{v.saveType}</span>
+                                                </div>
+                                                <Button size="sm" variant="secondary" className="w-full text-xs shadow-sm" onClick={() => onPreviewClick(v._id)}>
+                                                    Preview & Restore
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         )}
-                    </>
-                )}
+
+                        {/* --- TEAM & INVITE SECTION --- */}
+                        <div className="mt-8 pt-8 border-t border-[var(--theme-text)]/10 space-y-8">
+                            
+                            {/* TEAM PRESENCE */}
+                            <div>
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40 mb-3 ml-1">Team Presence</h4>
+                                <div className="space-y-1">
+                                    {onlineUsers.map((u, i) => (
+                                        <div key={`online-${i}`} className="flex items-center justify-between p-2 rounded-xl bg-[var(--theme-text)]/[0.02] border border-[var(--theme-text)]/5 hover:bg-[var(--theme-text)]/5 group transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative">
+                                                    <Avatar name={u.name} className="w-8 h-8 text-xs shadow-sm" />
+                                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[var(--theme-bg)] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                                </div>
+                                                <span className="text-sm font-bold text-[var(--theme-text)] truncate max-w-[110px]">
+                                                    {u.name} {u.isMe && <span className="text-[var(--theme-accent)] ml-1 text-xs">(You)</span>}
+                                                </span>
+                                            </div>
+                                            {isOwner && !u.isMe && String(u.id) !== ownerIdStr && (
+                                                <button onClick={() => handleRemoveCollaborator(u.id)} className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wide">
+                                                    Kick
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {offlineUsers.map((u, i) => (
+                                        <div key={`offline-${i}`} className="flex items-center justify-between p-2 rounded-xl hover:bg-[var(--theme-text)]/5 group transition-all opacity-50 hover:opacity-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative grayscale">
+                                                    <Avatar name={u.name || 'C'} className="w-8 h-8 text-xs shadow-sm" />
+                                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[var(--theme-text)]/30 border-2 border-[var(--theme-bg)] rounded-full"></div>
+                                                </div>
+                                                <span className="text-sm font-medium text-[var(--theme-text)] truncate max-w-[110px]">
+                                                    {u.name || 'Collaborator'}
+                                                </span>
+                                            </div>
+                                            {isOwner && String(u._id || u) !== ownerIdStr && (
+                                                <button onClick={() => handleRemoveCollaborator(u._id || u)} className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wide">
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* INVITE TEAM */}
+                            {isOwner && (
+                                <div>
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40 mb-3 ml-1">Invite Collaborator</h4>
+                                    <form onSubmit={handleInviteCollaborator} className="flex gap-2">
+                                        <div className="flex-1">
+                                            <Input type="email" placeholder="colleague@email.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+                                        </div>
+                                        <Button type="submit" variant="primary" isLoading={isInviting} className="px-4 shadow-sm">
+                                            {isInviting ? '' : 'Add'}
+                                        </Button>
+                                    </form>
+                                    
+                                    {pendingSentInvites.length > 0 && (
+                                        <div className="mt-4 space-y-2">
+                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-2 ml-1">Pending Invites</h4>
+                                            {pendingSentInvites.map(inv => (
+                                                <div key={inv._id} className="flex justify-between items-center bg-[var(--theme-text)]/5 border border-[var(--theme-text)]/10 px-3 py-2.5 rounded-xl group transition-all hover:border-red-500/30 hover:bg-red-500/5">
+                                                    <span className="text-xs font-medium text-[var(--theme-text)]/70 truncate pr-2">{inv.receiverId?.email}</span>
+                                                    <button onClick={() => handleUnsendInvite(inv._id)} className="text-[10px] font-bold text-red-500 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wide">
+                                                        Revoke
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

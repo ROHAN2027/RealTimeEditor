@@ -1,26 +1,28 @@
-import React,{useEffect , useRef , useState} from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import Quill from 'quill';
 import { QuillBinding } from 'y-quill';
 import api from '../api/axiosSetup';
 
-export default function VersionPreviewModal({projectId, versionId, onClose,onRestore}) {
+// 🌟 IMPORT YOUR PREMIUM BUTTON COMPONENT
+import Button from '../components/comman/Buttons'; 
+
+export default function VersionPreviewModal({ projectId, versionId, onClose, onRestore }) {
     const editorRef = useRef(null);
     const quillInstance = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [versionData, setVersionData] = useState(null);
-    const [binaryPayload, setBinaryPayload] = useState(null); // <-- This is the one that was missing!
+    const [binaryPayload, setBinaryPayload] = useState(null);
 
     useEffect(() => {
         const fetchVersion = async () => {
-            try{
+            try {
                 const res = await api.get(`/projects/${projectId}/versions/${versionId}`);
-                const data =res.data.version;
+                const data = res.data.version;
                 setVersionData(data);
 
-                const rawData = data.yjsBinary?.data || data.yjsBinary; // Handle both ArrayBuffer and Uint8Array
+                const rawData = data.yjsBinary?.data || data.yjsBinary; 
                 const uint8Array = new Uint8Array(rawData);
-                // 🌟 Save it to the state so the button can use it later!
                 setBinaryPayload(uint8Array);
 
                 const tempYdoc = new Y.Doc();
@@ -29,12 +31,12 @@ export default function VersionPreviewModal({projectId, versionId, onClose,onRes
                 if(editorRef.current && !quillInstance.current) {
                     quillInstance.current = new Quill(editorRef.current, {
                         theme: 'snow',
-                        readOnly: true,
+                        readOnly: true, // Prevents editing
                         modules: {
-                            toolbar: false
+                            toolbar: false // Hides the toolbar completely
                         }
                     });
-                    // 3. Bind the temporary document to the preview editor
+                    
                     const tempYtext = tempYdoc.getText('quill');
                     new QuillBinding(tempYtext, quillInstance.current);
                 }
@@ -50,43 +52,70 @@ export default function VersionPreviewModal({projectId, versionId, onClose,onRes
 
         return () => {
             if(quillInstance.current) {
-                quillInstance.current=null;
+                quillInstance.current = null;
             }
         }
-    },[projectId, versionId, onClose]);
+    }, [projectId, versionId, onClose]);
+
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999,
-            display: 'flex', flexDirection: 'column', padding: '40px', boxSizing: 'border-box'
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px 8px 0 0' }}>
-                <div>
-                    <h2 style={{ margin: 0, color: '#1e293b' }}>Previewing Version</h2>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                        {versionData ? `${versionData.versionName} - ${new Date(versionData.createdAt).toLocaleString()}` : 'Loading...'}
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                        onClick={() => onRestore(binaryPayload)} 
-                        disabled={isLoading || !binaryPayload} // Safely disable if payload isn't ready
-                        style={{ padding: '8px 16px', backgroundColor: '#eab308', color: 'white', border: 'none', borderRadius: '4px', cursor: isLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
-                    >
-                        ⚠️ Revert to this Version
-                    </button>
-                    <button 
-                        onClick={onClose} 
-                        style={{ padding: '8px 16px', backgroundColor: '#64748b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                        Cancel
-                    </button>
-                </div>
-            </div>
+        /* 🌟 FULLSCREEN GLASS BACKGROUND */
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex justify-center items-center p-4 sm:p-8 animate-in fade-in duration-200">
             
-            <div style={{ flex: 1, backgroundColor: '#fff', borderRadius: '0 0 8px 8px', padding: '20px', overflowY: 'auto' }}>
-                {isLoading && <div>Loading preview data...</div>}
-                <div ref={editorRef} style={{ border: 'none' }}></div>
+            {/* 🌟 MODAL CONTAINER */}
+            <div className="flex flex-col w-full max-w-5xl h-full max-h-[900px] bg-[var(--theme-bg)] rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] border border-[var(--theme-text)]/10 overflow-hidden">
+                
+                {/* --- PREMIUM HEADER --- */}
+                <div className="flex justify-between items-center p-6 sm:px-8 border-b border-[var(--theme-text)]/10 bg-[var(--theme-text)]/[0.02] shrink-0">
+                    <div>
+                        <h2 className="text-2xl font-extrabold text-[var(--theme-text)] tracking-tight">Version Preview</h2>
+                        <p className="text-xs font-bold text-[var(--theme-text)]/50 uppercase tracking-widest mt-1">
+                            {versionData ? `${versionData.versionName} - ${new Date(versionData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}` : 'Loading Document Data...'}
+                        </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <Button variant="ghost" onClick={onClose} className="hidden sm:flex">
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={() => onRestore(binaryPayload)} 
+                            disabled={isLoading || !binaryPayload}
+                            className="!bg-amber-500 hover:!bg-amber-600 !border-amber-400 !text-white shadow-lg shadow-amber-500/20"
+                        >
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            Revert to this Version
+                        </Button>
+                    </div>
+                </div>
+                
+                {/* --- DOCUMENT SCROLL AREA --- */}
+                <div className="flex-1 relative bg-black/5 dark:bg-white/5 overflow-y-auto scrollbar-hide flex flex-col items-center pt-8 pb-32 px-4 sm:px-8">
+                    
+                    {/* Subtle Developer Dots */}
+                    <div className="absolute inset-0 bg-[radial-gradient(var(--theme-text)_1.5px,transparent_1.5px)] [background-size:30px_30px] opacity-[0.04] pointer-events-none z-0 fixed"></div>
+
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center h-full gap-4 relative z-10 opacity-60">
+                            <div className="w-12 h-12 border-4 border-[var(--theme-text)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin"></div>
+                            <p className="text-sm font-bold uppercase tracking-widest text-[var(--theme-text)]">Decrypting Version...</p>
+                        </div>
+                    ) : (
+                        /* 🌟 THE "PAPER" DOCUMENT PREVIEW */
+                        <div className="w-full max-w-[850px] bg-[var(--theme-bg)] rounded-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.3)] border border-[var(--theme-text)]/10 flex flex-col relative z-10 min-h-[800px] animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+                            
+                            {/* Read-Only Badge */}
+                            <div className="absolute top-4 right-4 z-20 pointer-events-none">
+                                <div className="px-3 py-1 rounded-full bg-[var(--theme-text)]/5 border border-[var(--theme-text)]/10 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40">
+                                    Read Only
+                                </div>
+                            </div>
+
+                            {/* Quill mounts here safely */}
+                            <div ref={editorRef} className="w-full flex-1"></div>
+                        </div>
+                    )}
+                </div>
+
             </div>
         </div>
     );

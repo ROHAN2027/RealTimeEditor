@@ -15,6 +15,8 @@ import { TLdrawBlot } from './TLdrawBlot';
 import html2pdf from 'html2pdf.js';
 import { PageBreakBlot } from './PageBreakBlot';
 import './EditorRoom.css';
+import Button from '../components/comman/Buttons'; // (or 'Button' depending on what you named the file)
+import Input from '../components/comman/Input';
 
 import ProjectSideBar from './ProjectSideBar';
 import VersionPreviewModal from './VersionPreviewModal';
@@ -566,94 +568,164 @@ const EditorRoom = () => {
         
         return () => clearInterval(pulseInterval);
     }, [projectId, user?._id, user?.name, socket]);
+return (
+    <>
+      <div className="flex h-screen w-screen overflow-hidden bg-[var(--theme-bg)] text-[var(--theme-text)] font-sans selection:bg-[var(--theme-accent)]/30">
+        
+        {/* 🌟 SIDEBAR */}
+        <ProjectSideBar 
+          isOpen={isSidebarOpen} 
+          currentProjectId={projectId} 
+          onlineUsers={onlineUsers}
+          onClose={() => setIsSidebarOpen(false)}
+          onPreviewClick={(vId) => setPreviewVersionId(vId)}
+          versionRefreshTrigger={versionRefreshTrigger}
+        />
 
-    return (
-        <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-            <ProjectSideBar 
-                isOpen={isSidebarOpen} 
-                currentProjectId={projectId} 
-                onlineUsers={onlineUsers}
-                onClose={() => setIsSidebarOpen(false)}
-                onPreviewClick={(vId) => setPreviewVersionId(vId)}
-                versionRefreshTrigger={versionRefreshTrigger}
-            />
-
-            <div className="editor-container" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="editor-header">
-                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', marginRight: '15px', color: 'inherit' }}>☰</button>
-                    <h2>Project Editor</h2>
-                    <span style={{ color: isConnected ? 'green' : 'red', marginLeft: '10px' }}>{isConnected ? 'Live' : 'Connecting...'}</span>
-
-                    <div style={{ marginLeft: 'auto' }}>
-                        <button onClick={handleManualSave} disabled={isSaving} style={{marginLeft: '20px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
-                            {isSaving ? 'Saving...' : '💾 Save Version'}
-                        </button>
-                        <button onClick={() => setIsPdfModalOpen(true)} style={{marginLeft: '10px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#ec0a0a', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>Export PDF</button>
-                        <button onClick={insertPageBreak} style={{marginLeft: '10px', marginBottom:'3px', padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}>Add Page Break</button>
-                        <button onClick={insertDummyBoard} style={{ marginLeft: '10px', marginBottom: '3px', padding: '5px 10px', cursor: 'pointer', color: 'white', border: 'none', backgroundColor: '#12ec0a', borderRadius: '4px', fontWeight: 'bold' }}>Insert TLDraw</button>
-                    </div>
-                </div>
-                <div ref={editorRef} style={{ height: '80vh' }}></div>
-
-                {previewVersionId && (
-                    <VersionPreviewModal 
-                        projectId={projectId}
-                        versionId={previewVersionId}
-                        onClose={() => setPreviewVersionId(null)}
-                        onRestore={executeRestore}
-                    />
-                )}
-
-                {isPdfModalOpen && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', width: '90%', maxWidth: '1200px', height: '90%', backgroundColor: '#2d2d2d', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
-                            <div style={{ width: '300px', padding: '30px', backgroundColor: '#1e1e1e', color: 'white', display: 'flex', flexDirection: 'column', gap: '20px', borderRight: '1px solid #404040' }}>
-                                <h2 style={{ margin: '0 0 10px 0' }}>Print Settings</h2>
-                                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>File Name</label><input type="text" value={pdfSettings.filename} onChange={(e) => setPdfSettings({...pdfSettings, filename: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', boxSizing: 'border-box' }} /></div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Paper Size</label>
-                                    <select value={pdfSettings.format} onChange={(e) => setPdfSettings({...pdfSettings, format: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}>
-                                        <option value="a4">A4 (Standard International)</option><option value="letter">Letter (Standard US)</option><option value="legal">Legal (Long)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#9ca3af' }}>Orientation</label>
-                                    <select value={pdfSettings.orientation} onChange={(e) => setPdfSettings({...pdfSettings, orientation: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #404040', backgroundColor: '#2d2d2d', color: 'white', cursor: 'pointer' }}>
-                                        <option value="portrait">Portrait (Tall)</option><option value="landscape">Landscape (Wide)</option>
-                                    </select>
-                                </div>
-                                <div style={{ flex: 1 }}></div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    <a href={pdfPreviewUrl} download={`${pdfSettings.filename}.pdf`} style={{ display: 'block', textAlign: 'center', padding: '12px', backgroundColor: '#ef4444', color: 'white', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', pointerEvents: isGeneratingPreview ? 'none' : 'auto', opacity: isGeneratingPreview ? 0.5 : 1 }}>{isGeneratingPreview ? 'Processing...' : 'Download PDF'}</a>
-                                    <button onClick={() => setIsPdfModalOpen(false)} style={{ padding: '12px', backgroundColor: 'transparent', color: '#9ca3af', border: '1px solid #404040', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
-                                </div>
-                            </div>
-                            <div style={{ flex: 1, backgroundColor: '#52525b', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                {isGeneratingPreview ? (
-                                    <div style={{ color: 'white', fontSize: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}><div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.3)', borderTop: '4px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div><style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>Generating High-Res Preview...</div>
-                                ) : ( <iframe src={pdfPreviewUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" /> )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {isTLdrawOpen && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '20px', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: '15px 20px', borderRadius: '8px 8px 0 0', borderBottom: '1px solid #e5e7eb' }}>
-                            <h3 style={{ margin: 0 }}>Editing Drawing: {activeDrawingId}</h3>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button onClick={handleSaveDrawing} style={{ padding: '8px 16px', backgroundColor: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Save Drawing</button>
-                                <button onClick={() => setIsTLdrawOpen(false)} style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Close</button>
-                            </div>
-                        </div>
-                        <div style={{ flex: 1, backgroundColor: '#fff', borderRadius: '0 0 8px 8px', overflow: 'hidden', position: 'relative' }}>
-                            <IsolatedMultiplayerTldraw drawingId={activeDrawingId} projectId={projectId} onMount={setTldrawEditor} isolatedYdocRef={isolatedYdocRef} mainSocket={mainSocket} />
-                        </div>
-                    </div>
-                )}
+        {/* 🌟 MAIN WORKSPACE COLUMN */}
+        <div className="flex-1 flex flex-col h-full relative z-10 transition-all duration-300 shadow-[-10px_0_30px_rgba(0,0,0,0.15)]">
+          
+          {/* --- PREMIUM HEADER (Untouched) --- */}
+          <header className="h-16 px-4 sm:px-6 border-b border-[var(--theme-text)]/10 bg-[var(--theme-bg)] shadow-sm flex items-center justify-between shrink-0 z-30 relative">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+                className="p-2 rounded-xl bg-[var(--theme-text)]/5 hover:bg-[var(--theme-text)]/10 text-[var(--theme-text)]/70 hover:text-[var(--theme-text)] transition-colors focus:outline-none"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h7" /></svg>
+              </button>
+              
+              <h2 className="text-xl font-extrabold truncate max-w-[150px] sm:max-w-xs tracking-tight">Project Editor</h2>
+              
+              <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${isConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                <span className="relative flex h-2 w-2">
+                  {isConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                </span>
+                {isConnected ? 'Live Sync' : 'Connecting'}
+              </div>
             </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button onClick={insertDummyBoard} variant="secondary" size="sm" className="hidden lg:flex shadow-sm">
+                <svg className="w-4 h-4 mr-1.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                Whiteboard
+              </Button>
+              <Button onClick={insertPageBreak} variant="secondary" size="sm" className="hidden md:flex shadow-sm">
+                <svg className="w-4 h-4 mr-1.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                Add Break
+              </Button>
+              <Button onClick={() => setIsPdfModalOpen(true)} variant="danger" size="sm" className="shadow-md shadow-red-500/20 hover:shadow-red-500/40">
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                Export PDF
+              </Button>
+              <Button onClick={handleManualSave} isLoading={isSaving} variant="primary" size="sm" className="shadow-md shadow-[var(--theme-accent)]/20 hover:shadow-[var(--theme-accent)]/40">
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                {isSaving ? 'Saving...' : 'Save Version'}
+              </Button>
+            </div>
+          </header>
+
+          {/* --- 🌟 THE "PAPER" EDITOR CANVAS (Untouched) --- */}
+          <div className="flex-1 relative bg-[var(--theme-text)]/5 overflow-hidden flex flex-col">
+             <div className="absolute inset-0 bg-[radial-gradient(var(--theme-text)_1.5px,transparent_1.5px)] [background-size:30px_30px] opacity-[0.04] pointer-events-none z-0"></div>
+             
+             <div className="absolute inset-0 z-10 overflow-y-auto scrollbar-hide flex justify-center px-4 sm:px-8">
+                 <div className="w-full max-w-[850px] mt-10 mb-32 bg-[var(--theme-bg)] rounded-xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.4)] border border-[var(--theme-text)]/20 flex flex-col relative h-max min-h-[1056px]">
+                    <div ref={editorRef} className="w-full flex-1 flex flex-col"></div>
+                 </div>
+             </div>
+          </div>
+
         </div>
-    );
-};
+      </div>
+      {/* 🛑 END OF MAIN APP LAYOUT 🛑 */}
+
+
+      {/* ========================================================= */}
+      {/* 🌟 ROOT-LEVEL MODALS (Safely covers the entire screen!)   */}
+      {/* ========================================================= */}
+
+      {/* VERSION PREVIEW MODAL */}
+      {previewVersionId && (
+        <VersionPreviewModal projectId={projectId} versionId={previewVersionId} onClose={() => setPreviewVersionId(null)} onRestore={executeRestore} />
+      )}
+
+      {/* PREMIUM PDF MODAL */}
+      {isPdfModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex justify-center items-center p-4 sm:p-8 animate-in fade-in duration-200">
+          <div className="flex flex-col md:flex-row w-full max-w-6xl h-full max-h-[900px] bg-[var(--theme-bg)] rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] border border-[var(--theme-text)]/10 overflow-hidden">
+            <div className="w-full md:w-80 p-8 bg-[var(--theme-text)]/5 border-r border-[var(--theme-text)]/10 flex flex-col gap-6 shrink-0 overflow-y-auto">
+              <div>
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)] tracking-tight">Export PDF</h2>
+                <p className="text-sm text-[var(--theme-text)]/50 mt-1 font-medium">Configure document format.</p>
+              </div>
+              <div className="space-y-5 flex-1">
+                <Input label="File Name" value={pdfSettings.filename} onChange={(e) => setPdfSettings({...pdfSettings, filename: e.target.value})} />
+                <div className="flex flex-col gap-1.5 w-full">
+                  <label className="text-sm font-bold text-[var(--theme-text)]/80 ml-1">Paper Size</label>
+                  <select value={pdfSettings.format} onChange={(e) => setPdfSettings({...pdfSettings, format: e.target.value})} className="w-full px-4 py-3 bg-[var(--theme-bg)]/80 backdrop-blur-sm border border-[var(--theme-text)]/20 rounded-xl text-[var(--theme-text)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-accent)]/50 appearance-none cursor-pointer">
+                    <option value="a4" className="bg-white text-black">A4 (Standard)</option><option value="letter" className="bg-white text-black">Letter (US)</option><option value="legal" className="bg-white text-black">Legal (Long)</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <label className="text-sm font-bold text-[var(--theme-text)]/80 ml-1">Orientation</label>
+                  <select value={pdfSettings.orientation} onChange={(e) => setPdfSettings({...pdfSettings, orientation: e.target.value})} className="w-full px-4 py-3 bg-[var(--theme-bg)]/80 backdrop-blur-sm border border-[var(--theme-text)]/20 rounded-xl text-[var(--theme-text)] focus:outline-none focus:ring-2 focus:ring-[var(--theme-accent)]/50 appearance-none cursor-pointer">
+                    <option value="portrait" className="bg-white text-black">Portrait (Tall)</option><option value="landscape" className="bg-white text-black">Landscape (Wide)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 pt-6 mt-auto">
+                <Button variant="danger" className="w-full py-3.5 shadow-lg" onClick={() => {}} disabled={isGeneratingPreview}>
+                   <a href={pdfPreviewUrl} download={`${pdfSettings.filename}.pdf`} className="w-full h-full flex items-center justify-center">
+                      {isGeneratingPreview ? 'Processing...' : 'Download PDF'}
+                   </a>
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => setIsPdfModalOpen(false)}>Cancel</Button>
+              </div>
+            </div>
+            <div className="flex-1 relative bg-black/5 flex justify-center items-center overflow-hidden">
+              <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), repeating-linear-gradient(45deg, #000 25%, #fff 25%, #fff 75%, #000 75%, #000)', backgroundPosition: '0 0, 10px 10px', backgroundSize: '20px 20px' }}></div>
+              {isGeneratingPreview ? (
+                <div className="flex flex-col items-center gap-6 z-10 animate-in zoom-in duration-300">
+                  <div className="w-16 h-16 border-4 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin"></div>
+                  <span className="text-lg font-bold text-[var(--theme-text)]/70 tracking-wide">Rendering High-Res Preview...</span>
+                </div>
+              ) : (
+                <div className="w-full h-full p-4 sm:p-8 z-10 drop-shadow-2xl">
+                  <iframe src={pdfPreviewUrl} className="w-full h-full rounded-lg border border-[var(--theme-text)]/10 bg-white" title="PDF Preview" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PREMIUM TLDRAW MODAL */}
+      {isTLdrawOpen && (
+        <div className="fixed inset-0 bg-[var(--theme-bg)]/80 backdrop-blur-xl z-[9999] flex flex-col p-4 sm:p-8 animate-in fade-in zoom-in-95 duration-200">
+          <div className="mx-auto w-full max-w-7xl flex justify-between items-center bg-[var(--theme-bg)]/60 backdrop-blur-2xl px-6 py-4 rounded-2xl border border-[var(--theme-text)]/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] mb-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[var(--theme-text)] leading-tight">Interactive Whiteboard</h3>
+                <p className="text-xs font-bold text-[var(--theme-text)]/40 uppercase tracking-widest mt-0.5">ID: {activeDrawingId?.substring(0,8)}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="ghost" onClick={() => setIsTLdrawOpen(false)} className="hidden sm:flex">Cancel</Button>
+              <Button variant="primary" onClick={handleSaveDrawing} className="!bg-emerald-500 hover:!bg-emerald-600 !border-emerald-400 shadow-emerald-500/20">Save to Document</Button>
+            </div>
+          </div>
+          <div className="flex-1 max-w-7xl w-full mx-auto bg-[var(--theme-bg)] rounded-3xl border border-[var(--theme-text)]/10 shadow-2xl overflow-hidden relative">
+            <IsolatedMultiplayerTldraw drawingId={activeDrawingId} projectId={projectId} onMount={setTldrawEditor} isolatedYdocRef={isolatedYdocRef} mainSocket={mainSocket} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default EditorRoom;

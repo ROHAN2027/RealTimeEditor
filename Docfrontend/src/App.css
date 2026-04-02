@@ -1,12 +1,113 @@
 @import "tailwindcss";
 
 @layer utilities {
+  /* 🌟 Safari & Chrome support for blur */
   .glass-panel {
-    /* 🌟 Safari & Chrome support for blur */
     -webkit-backdrop-filter: blur(24px);
     backdrop-filter: blur(24px);
   }
+  
+  /* 🌟 Premium Scrollbar Hider */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
+
+/* ---------------------------------------------------- */
+/* 🌟 THE NUCLEAR CHROME AUTOFILL FIX                   */
+/* ---------------------------------------------------- */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--theme-bg) inset !important;
+    -webkit-text-fill-color: var(--theme-text) !important;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: var(--theme-text) !important;
+}
+
+/* ---------------------------------------------------- */
+/* 🌟 STEALTH MODE: PDF EXPORT                          */
+/* ---------------------------------------------------- */
+.pdf-exporting hr.custom-page-break {
+    border-color: transparent !important;
+    background-color: transparent !important;
+}
+.pdf-exporting hr.custom-page-break::after { 
+    display: none !important; 
+}
+
+/* ---------------------------------------------------- */
+/* 🌟 PREMIUM QUILL EDITOR THEME OVERRIDES              */
+/* ---------------------------------------------------- */
+
+
+
+/* 2. The Text Scroll Area */
+.ql-editor {
+    flex-grow: 1 !important;
+    overflow-y: auto !important; /* Only the text scrolls */
+    padding: 3rem 4rem 8rem 4rem !important; /* Premium margins */
+    line-height: 1.8 !important;
+}
+
+/* Theme-aware Placeholder text */
+.ql-editor.ql-blank::before {
+    color: var(--theme-text) !important;
+    opacity: 0.3;
+    font-style: normal !important;
+    left: 4rem !important;
+}
+
+/* 3. The Toolbar (Docked permanently at the top) */
+.ql-toolbar.ql-snow {
+    position: relative !important; 
+    z-index: 40 !important;
+    background: var(--theme-bg) !important; 
+    border: none !important;
+    border-bottom: 1px solid rgba(150, 150, 150, 0.15) !important;
+    padding: 12px 20px !important;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2) !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    border-radius: 0.75rem 0.75rem 0 0 !important;
+    position: sticky !important;
+   
+}
+
+/* 4. Beautiful, Rounded Toolbar Buttons */
+.ql-toolbar.ql-snow button {
+    border-radius: 6px !important;
+    transition: all 0.2s ease !important;
+    height: 28px !important;
+    width: 28px !important;
+}
+
+.ql-toolbar.ql-snow .ql-stroke { stroke: var(--theme-text) !important; opacity: 0.5; transition: all 0.2s ease; }
+.ql-toolbar.ql-snow .ql-fill { fill: var(--theme-text) !important; opacity: 0.5; transition: all 0.2s ease; }
+.ql-toolbar.ql-snow .ql-picker { color: var(--theme-text) !important; opacity: 0.7; font-weight: 600; }
+
+/* Hover & Active Tool Animations */
+.ql-toolbar.ql-snow button:hover,
+.ql-toolbar.ql-snow .ql-picker-label:hover {
+    background-color: var(--theme-text) !important;
+    opacity: 0.1 !important; 
+}
+
+/* Light up the icon when active */
+.ql-toolbar.ql-snow button.ql-active .ql-stroke,
+.ql-toolbar.ql-snow button:hover .ql-stroke { opacity: 1 !important; stroke: var(--theme-accent) !important; }
+.ql-toolbar.ql-snow button.ql-active .ql-fill,
+.ql-toolbar.ql-snow button:hover .ql-fill { opacity: 1 !important; fill: var(--theme-accent) !important; }
+
+/* Dropdown Text Color Fix */
+.ql-toolbar.ql-snow .ql-picker-label:hover,
+.ql-toolbar.ql-snow .ql-picker-label.ql-active { color: var(--theme-accent) !important; opacity: 1 !important; }
 /* Apply the global theme */
 body {
     background: var(--theme-bg);

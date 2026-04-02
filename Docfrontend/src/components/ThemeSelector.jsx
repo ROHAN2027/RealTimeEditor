@@ -17,99 +17,22 @@ export default function ThemeSelector() {
     }, [isOpen]);
 
     return (
-        <div ref={dropdownRef} className="theme-widget-container">
+        <div ref={dropdownRef} className="fixed bottom-6 right-6 z-[999999] font-sans">
             
-            {/* 🌟 BULLETPROOF CSS INJECTION 🌟 */}
-            {/* This completely bypasses Tailwind and forces the browser to style the menu */}
-            <style>{`
-                .theme-widget-container {
-                    position: fixed;
-                    bottom: 24px;
-                    right: 24px;
-                    z-index: 999999; /* Forces it above everything else */
-                    font-family: system-ui, -apple-system, sans-serif;
-                }
-                .theme-popup {
-                    position: absolute;
-                    bottom: 70px; /* Forces it to sit above the button */
-                    right: 0;
-                    width: 320px;
-                    background: #ffffff;
-                    border-radius: 16px;
-                    box-shadow: 0 15px 40px rgba(0,0,0,0.3);
-                    padding: 16px;
-                    border: 1px solid #e2e8f0;
-                    animation: popUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-                @keyframes popUp {
-                    from { opacity: 0; transform: translateY(10px) scale(0.95); }
-                    to { opacity: 1; transform: translateY(0) scale(1); }
-                }
-                .theme-header-box {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 12px;
-                    padding-bottom: 12px;
-                    border-bottom: 1px solid #f1f5f9;
-                }
-                .theme-title-text { margin: 0; font-size: 15px; font-weight: 800; color: #1e293b; }
-                .theme-count { font-size: 11px; background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 12px; font-weight: 700; }
-                .theme-grid-box {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 10px;
-                    max-height: 320px;
-                    overflow-y: auto;
-                    padding-right: 4px;
-                }
-                .theme-option-btn {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 12px 8px;
-                    border-radius: 12px;
-                    border: 2px solid transparent;
-                    background: #f8fafc;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-                .theme-option-btn:hover { background: #f1f5f9; transform: translateY(-2px); }
-                .theme-option-btn.active { border-color: #3b82f6; background: #eff6ff; }
-                .theme-color-circle {
-                    width: 38px;
-                    height: 38px;
-                    border-radius: 50%;
-                    border: 2px solid #e2e8f0;
-                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .theme-option-btn.active .theme-color-circle { border-color: #3b82f6; }
-                .theme-option-label { font-size: 12px; font-weight: 700; color: #475569; margin: 0; }
-                .theme-option-btn.active .theme-option-label { color: #1d4ed8; }
-                .theme-fab {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 50%;
-                    border: 3px solid rgba(255,255,255,0.5);
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    cursor: pointer;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                }
-                .theme-fab:hover { transform: scale(1.1); box-shadow: 0 15px 35px rgba(0,0,0,0.5); }
-            `}</style>
-
-            {/* The Floating Menu */}
+            {/* 🌟 THE FLOATING MENU (Glassmorphic & Animated) */}
             {isOpen && (
-                <div className="theme-popup">
-                    <div className="theme-header-box">
-                        <h3 className="theme-title-text">Workspace Theme</h3>
-                        <span className="theme-count">{Object.keys(THEMES).length} options</span>
+                <div className="absolute bottom-20 right-0 w-[320px] bg-[var(--theme-bg)]/95 backdrop-blur-2xl rounded-[1.25rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] border border-[var(--theme-text)]/10 p-5 animate-in fade-in slide-in-from-bottom-4 zoom-in-95 duration-200">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-[var(--theme-text)]/10">
+                        <h3 className="text-sm font-extrabold text-[var(--theme-text)] uppercase tracking-wide">Workspace Theme</h3>
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-[var(--theme-text)]/5 text-[var(--theme-text)]/60 px-2 py-1 rounded-md border border-[var(--theme-text)]/5">
+                            {Object.keys(THEMES).length} options
+                        </span>
                     </div>
-                    <div className="theme-grid-box">
+                    
+                    {/* Theme Grid */}
+                    <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto scrollbar-hide pr-1 pb-1">
                         {Object.entries(THEMES).map(([key, theme]) => (
                             <button
                                 key={key}
@@ -118,27 +41,50 @@ export default function ThemeSelector() {
                                     setCurrentThemeKey(key);
                                     setIsOpen(false);
                                 }}
-                                className={`theme-option-btn ${currentThemeKey === key ? 'active' : ''}`}
+                                className={`group flex flex-col items-center gap-2.5 p-3.5 rounded-xl border-2 transition-all duration-300 ${
+                                    currentThemeKey === key 
+                                    ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)]/10 shadow-[0_4px_15px_-3px_var(--theme-accent)]' 
+                                    : 'border-transparent bg-[var(--theme-text)]/[0.03] hover:bg-[var(--theme-text)]/10 hover:-translate-y-1 hover:shadow-md'
+                                }`}
                             >
-                                <div className="theme-color-circle" style={{ background: theme.bg }} />
-                                <span className="theme-option-label">{theme.name}</span>
+                                {/* Theme Color Circle Preview */}
+                                <div 
+                                    className={`w-10 h-10 rounded-full border-2 shadow-inner transition-colors duration-300 ${
+                                        currentThemeKey === key 
+                                        ? 'border-[var(--theme-accent)]' 
+                                        : 'border-[var(--theme-text)]/20 group-hover:border-[var(--theme-text)]/40'
+                                    }`} 
+                                    style={{ background: theme.bg }} 
+                                />
+                                {/* Theme Name */}
+                                <span className={`text-xs font-bold transition-colors duration-300 ${
+                                    currentThemeKey === key 
+                                    ? 'text-[var(--theme-accent)]' 
+                                    : 'text-[var(--theme-text)]/70 group-hover:text-[var(--theme-text)]'
+                                }`}>
+                                    {theme.name}
+                                </span>
                             </button>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* The Trigger Button */}
+            {/* 🌟 THE TRIGGER BUTTON (FAB) */}
             <button 
                 onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(!isOpen);
                 }}
-                className="theme-fab"
+                className="w-14 h-14 rounded-full border-2 border-white/20 shadow-[0_10px_25px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 hover:shadow-[0_15px_35px_rgba(0,0,0,0.4)] active:scale-95 group relative"
                 style={{ background: THEMES[currentThemeKey]?.bg || '#1e293b' }}
                 title="Change Theme"
             >
-                <svg width="26" height="26" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                {/* Subtle inner ring that glows on hover */}
+                <div className="absolute inset-0 rounded-full border-2 border-white/0 group-hover:border-white/40 transition-colors duration-300"></div>
+                
+                {/* Paint Roller Icon */}
+                <svg className="w-6 h-6 text-white drop-shadow-md group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                     <path d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                 </svg>
             </button>

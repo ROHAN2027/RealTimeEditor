@@ -7,3 +7,93 @@
 .pdf-exporting hr.custom-page-break::after {
     display: none !important;
 }
+
+
+
+/* ---------------------------------------------------- */
+/* 🌟 PREMIUM QUILL EDITOR THEME OVERRIDES              */
+/* ---------------------------------------------------- */
+/* ---------------------------------------------------- */
+/* 🌟 PREMIUM QUILL EDITOR THEME OVERRIDES              */
+/* ---------------------------------------------------- */
+
+/* 1. The Floating Toolbar */
+.ql-toolbar.ql-snow {
+    border: none !important;
+    border-bottom: 1px solid rgba(150, 150, 150, 0.15) !important;
+    background-color: var(--theme-bg) !important;
+    
+    /* 🌟 THE FIX: Set to 0. If this is rounded, text will peek out the corners when scrolling! */
+    border-radius: 0 !important; 
+    
+    position: sticky !important;
+    top: 0;
+    z-index: 50;
+    padding: 12px 20px !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    
+    /* 🌟 Added a subtle shadow so it looks like it's floating above the text */
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
+}
+
+/* 2. Style Toolbar Icons to match the App Theme */
+.ql-toolbar.ql-snow .ql-stroke {
+    stroke: var(--theme-text) !important;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+.ql-toolbar.ql-snow .ql-fill {
+    fill: var(--theme-text) !important;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+.ql-toolbar.ql-snow .ql-picker {
+    color: var(--theme-text) !important;
+    opacity: 0.6;
+    font-weight: 600;
+}
+
+/* Hover & Active States for Toolbar Buttons */
+.ql-toolbar.ql-snow button:hover,
+.ql-toolbar.ql-snow .ql-picker-label:hover {
+    background-color: rgba(150, 150, 150, 0.1) !important;
+    border-radius: 6px;
+}
+.ql-toolbar.ql-snow button:hover .ql-stroke,
+.ql-toolbar.ql-snow button.ql-active .ql-stroke {
+    opacity: 1;
+    stroke: var(--theme-accent) !important; 
+}
+.ql-toolbar.ql-snow button:hover .ql-fill,
+.ql-toolbar.ql-snow button.ql-active .ql-fill {
+    opacity: 1;
+    fill: var(--theme-accent) !important;
+}
+
+/* 3. The Canvas (The Actual Text Area) */
+.ql-container.ql-snow {
+    border: none !important;
+    font-family: inherit !important;
+    font-size: 1.05rem !important;
+    color: var(--theme-text) !important;
+    padding: 0.5rem 1.5rem 1rem 1.5rem !important; 
+    
+    /* 🌟 THE FIX: Ensure solid background so text completely vanishes behind the toolbar */
+    background-color: var(--theme-bg) !important;
+}
+
+/* Enhances line height for premium reading experience */
+.ql-editor {
+    min-height: 100% !important;
+    line-height: 1.8 !important;
+}
+
+/* Theme-aware Placeholder text */
+.ql-editor.ql-blank::before {
+    color: var(--theme-text) !important;
+    opacity: 0.3;
+    font-style: normal !important;
+    left: 2rem !important;
+}
