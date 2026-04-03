@@ -13,6 +13,16 @@ const userSchema = new mongoose.Schema({
     passwordHash: {
         type: String,
     },
+    isEmailVerified: {
+        type: Boolean,
+        default: false,
+    },
+    verificationToken: {
+        type: String,
+    },
+    verificationTokenExpires: {
+        type: Date,
+    },
     authProvider: { 
         type: String, 
         default: 'local' 

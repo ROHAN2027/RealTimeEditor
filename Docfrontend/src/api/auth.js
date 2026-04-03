@@ -80,4 +80,10 @@ export const logoutUser = async () => {
 };
 
 
+// ✅ CORRECT (Make sure it looks EXACTLY like this)
+export const verifyOtpUser = async (data) => {
+    // It MUST be api.post, and it MUST spell '/auth/verify-otp'
+    const response = await api.post('/auth/verify-otp', data);
+    return response.data;
+};
 
