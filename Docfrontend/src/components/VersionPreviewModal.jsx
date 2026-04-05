@@ -28,6 +28,7 @@ export default function VersionPreviewModal({ projectId, versionId, onClose, onR
                 const tempYdoc = new Y.Doc();
                 Y.applyUpdate(tempYdoc, uint8Array);
 
+                // 🌟 Because the div is now always in the DOM, this Ref will work immediately!
                 if(editorRef.current && !quillInstance.current) {
                     quillInstance.current = new Quill(editorRef.current, {
                         theme: 'snow',
@@ -55,7 +56,9 @@ export default function VersionPreviewModal({ projectId, versionId, onClose, onR
                 quillInstance.current = null;
             }
         }
-    }, [projectId, versionId, onClose]);
+    // 🌟 FIX 1: Removed onClose to prevent the infinite network loop!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, versionId]); 
 
     return (
         /* 🌟 FULLSCREEN GLASS BACKGROUND */
@@ -94,26 +97,29 @@ export default function VersionPreviewModal({ projectId, versionId, onClose, onR
                     {/* Subtle Developer Dots */}
                     <div className="absolute inset-0 bg-[radial-gradient(var(--theme-text)_1.5px,transparent_1.5px)] [background-size:30px_30px] opacity-[0.04] pointer-events-none z-0 fixed"></div>
 
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center h-full gap-4 relative z-10 opacity-60">
+                    {/* 🌟 FIX 2: ALWAYS RENDER BOTH, BUT USE CSS TO HIDE/SHOW */}
+                    
+                    {/* 1. The Loader Overlay (Sits on top while loading) */}
+                    {isLoading && (
+                        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[var(--theme-bg)]/60 backdrop-blur-sm rounded-xl">
                             <div className="w-12 h-12 border-4 border-[var(--theme-text)]/20 border-t-[var(--theme-accent)] rounded-full animate-spin"></div>
-                            <p className="text-sm font-bold uppercase tracking-widest text-[var(--theme-text)]">Decrypting Version...</p>
-                        </div>
-                    ) : (
-                        /* 🌟 THE "PAPER" DOCUMENT PREVIEW */
-                        <div className="w-full max-w-[850px] bg-[var(--theme-bg)] rounded-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.3)] border border-[var(--theme-text)]/10 flex flex-col relative z-10 min-h-[800px] animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
-                            
-                            {/* Read-Only Badge */}
-                            <div className="absolute top-4 right-4 z-20 pointer-events-none">
-                                <div className="px-3 py-1 rounded-full bg-[var(--theme-text)]/5 border border-[var(--theme-text)]/10 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40">
-                                    Read Only
-                                </div>
-                            </div>
-
-                            {/* Quill mounts here safely */}
-                            <div ref={editorRef} className="w-full flex-1"></div>
+                            <p className="text-sm font-bold uppercase tracking-widest text-[var(--theme-text)] mt-4">Decrypting Version...</p>
                         </div>
                     )}
+
+                    {/* 2. The Document Preview (ALWAYS in the DOM, so the Ref works instantly!) */}
+                    <div className={`w-full max-w-[850px] bg-[var(--theme-bg)] rounded-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.3)] border border-[var(--theme-text)]/10 flex flex-col relative z-10 min-h-[800px] transition-all duration-700 ease-out ${isLoading ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100 animate-in fade-in slide-in-from-bottom-8'}`}>
+                        
+                        {/* Read-Only Badge */}
+                        <div className="absolute top-4 right-4 z-20 pointer-events-none">
+                            <div className="px-3 py-1 rounded-full bg-[var(--theme-text)]/5 border border-[var(--theme-text)]/10 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text)]/40">
+                                Read Only
+                            </div>
+                        </div>
+
+                        {/* Quill mounts here safely because it ALWAYS exists! */}
+                        <div ref={editorRef} className="w-full flex-1"></div>
+                    </div>
                 </div>
 
             </div>

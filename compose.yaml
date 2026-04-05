@@ -1,0 +1,45 @@
+version: '3.8'
+
+services : 
+  mongodb:
+    image : mongo
+    container_name : sync_editor_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  
+  backend:
+    build:
+      context : ./DocServer
+    container_name: sync_editor_backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./DocServer/.env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/sync_editor_db
+      - PORT=5000
+    depends_on:
+      - mongodb
+  
+  frontend:
+    build:
+      context : ./Docfrontend
+      args:
+        # Docker Compose reads from your local .env and passes it to the Dockerfile
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+        - VITE_GITHUB_URL=${VITE_GITHUB_URL}
+        - VITE_LINKEDIN_URL=${VITE_LINKEDIN_URL}
+        - VITE_LEETCODE_URL=${VITE_LEETCODE_URL}
+        - VITE_AVATAR_URL=${VITE_AVATAR_URL}
+    container_name: sync_editor_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+    

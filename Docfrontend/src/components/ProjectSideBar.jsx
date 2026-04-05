@@ -102,12 +102,14 @@ export default function ProjectSideBar({
         if (!isOpen || activeTab !== 'versions') return;
         const fetchVersions = async () => {
             try {
-                const res = await api.get(`/projects/${currentProjectId}/versions`);
+                const res = await api.get(`/projects/${currentProjectId}/versions`,{
+                    headers: { 'Cache-Control': 'no-cache' } 
+                });
                 setVersions(res.data?.versions || []);
             } catch (err) { console.error('Error fetching versions:', err); }
         };
         fetchVersions();
-    }, [isOpen, activeTab, currentProjectId, versionRefreshTrigger]);
+    }, [isOpen, activeTab, currentProjectId, versionRefreshTrigger,refreshTrigger]);
 
     const handleUpdateProject = async (e) => {
         e.preventDefault();
