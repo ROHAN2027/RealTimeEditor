@@ -29,6 +29,26 @@ Quill.register('modules/cursors', QuillCursor);
 Quill.register(TLdrawBlot);
 Quill.register(PageBreakBlot);
 
+// 🌟 CUSTOM LINK OVERRIDE
+const Link = Quill.import('formats/link');
+
+class CustomLink extends Link {
+  static sanitize(url) {
+    // 1. Let Quill do its default security sanitization first
+    let sanitizedUrl = super.sanitize(url);
+    
+    // 2. Force it to be an absolute URL by adding "https://" if missing
+    if (sanitizedUrl && !/^(https?:\/\/|mailto:|tel:)/i.test(sanitizedUrl)) {
+      sanitizedUrl = `https://${sanitizedUrl}`;
+    }
+    
+    return sanitizedUrl;
+  }
+}
+
+// The 'true' flag at the end overwrites Quill's default Link format with ours
+Quill.register(CustomLink);
+
 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 const EditorRoom = () => {
