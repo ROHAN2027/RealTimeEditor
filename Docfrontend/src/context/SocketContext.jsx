@@ -17,9 +17,12 @@ useEffect(() => {
             return;
         }
 
-        // 1. Create the socket
-        const backendURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-        const newSocket = io(backendURL, {
+        // // 1. Create the socket
+        // const backendURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+        // const newSocket = io(backendURL, {
+        //     withCredentials: true,
+        // });
+        const newSocket = io("/", {
             withCredentials: true,
         });
 

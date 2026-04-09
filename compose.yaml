@@ -4,8 +4,6 @@ services :
   mongodb:
     image : mongo
     container_name : sync_editor_db
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
   
@@ -13,8 +11,6 @@ services :
     build:
       context : ./DocServer
     container_name: sync_editor_backend
-    ports:
-      - "5000:5000"
     env_file:
       - ./DocServer/.env
     environment:
