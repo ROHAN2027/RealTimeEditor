@@ -19,6 +19,9 @@ await connectDB();
 const PORT = process.env.PORT || 5000;
 const app = express();
 
+// 🌟 ADD THIS LINE: Tells Express to trust the HTTPS headers coming from Nginx
+app.set('trust proxy', 1);
+
 app.use(cors(
     {
         origin : allowedOrigins,
@@ -26,11 +29,12 @@ app.use(cors(
     }
 ));
 
-// 🌟 UPDATE THESE TWO LINES: Increase Node.js payload limits to 50MB
+// 🌟 Increased Node.js payload limits to 50MB
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.use(express.json());
+// 🔴 DELETED: app.use(express.json()); -> This was overwriting your 50mb limit!
+
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
@@ -44,11 +48,11 @@ app.use((err, req, res, next) => {
         message: err.message || 'Internal Server Error' 
     });
 });
+
 const httpServer = http.createServer(app);
 const io = initializeSocket(httpServer);
 app.set('io', io);
+
 httpServer.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
-

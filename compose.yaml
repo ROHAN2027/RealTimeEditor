@@ -11,6 +11,9 @@ services :
     build:
       context : ./DocServer
     container_name: sync_editor_backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     env_file:
       - ./DocServer/.env
     environment:

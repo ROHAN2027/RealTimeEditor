@@ -24,6 +24,7 @@ ENV VITE_LEETCODE_URL=$VITE_LEETCODE_URL
 ENV VITE_AVATAR_URL=$VITE_AVATAR_URL
 
 RUN npm run build
+# RUN npm run build -- --mode development
 
 FROM nginx:alpine
 

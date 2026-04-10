@@ -184,12 +184,16 @@ const IsolatedMultiplayerTldraw = ({ drawingId ,projectId , onMount , isolatedYd
     if(status === 'loading' || !isolatedMap) {
         return <div style={{ padding: 20 }}>Loading isolated collaborative canvas...</div>;
     }
-    return (<Tldraw
-        store={store}
-        components={{SharePanel: ()=>null}}
-        onMount={onMount}
-/>
-    );  
+    return (
+        // 🌟 ADD THIS WRAPPER DIV!
+        <div style={{ position: 'absolute', inset: 0 }}>
+            <Tldraw
+                store={store}
+                components={{SharePanel: ()=>null}}
+                onMount={onMount}
+            />
+        </div>
+    );
 };
 
 export default IsolatedMultiplayerTldraw;

@@ -168,6 +168,10 @@ export const login = async (req, res) => {
         if (!user) {
             return res.status(400).json({message: "no user with this email"});
         }
+        // 🌟 ADD THIS SAFETY CHECK:
+        if (!user.passwordHash) {
+            return res.status(400).json({ error: "Invalid account setup. Please sign in with Google." });
+        }
         const isValid = await verifyPassword(password, user.passwordHash);
         if (!isValid) {
             return res.status(400).json({message: "Invalid password"});
@@ -181,7 +185,8 @@ export const login = async (req, res) => {
             'jwt_token',token,
             {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                // secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                secure: true,      // 🌟 MANDATORY for Cloudflare/HTTPS!
                 sameSite: 'lax', // Adjust as needed (e.g., 'lax' or 'none' if you have cross-origin requests)
                 maxAge: 7 * 24 * 60 * 60 * 1000 // Cookie expires in 7 days
             }
